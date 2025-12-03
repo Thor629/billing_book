@@ -66,6 +66,56 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/{id}', [App\Http\Controllers\GodownController::class, 'destroy']);
     });
     
+    // Quotation routes
+    Route::prefix('quotations')->group(function () {
+        Route::get('/', [App\Http\Controllers\QuotationController::class, 'index']);
+        Route::post('/', [App\Http\Controllers\QuotationController::class, 'store']);
+        Route::get('/next-number', [App\Http\Controllers\QuotationController::class, 'getNextQuotationNumber']);
+        Route::get('/{id}', [App\Http\Controllers\QuotationController::class, 'show']);
+        Route::put('/{id}', [App\Http\Controllers\QuotationController::class, 'update']);
+        Route::delete('/{id}', [App\Http\Controllers\QuotationController::class, 'destroy']);
+    });
+    
+    // Payment In routes
+    Route::prefix('payment-ins')->group(function () {
+        Route::get('/', [App\Http\Controllers\PaymentInController::class, 'index']);
+        Route::post('/', [App\Http\Controllers\PaymentInController::class, 'store']);
+        Route::get('/next-number', [App\Http\Controllers\PaymentInController::class, 'getNextPaymentNumber']);
+        Route::get('/{id}', [App\Http\Controllers\PaymentInController::class, 'show']);
+        Route::put('/{id}', [App\Http\Controllers\PaymentInController::class, 'update']);
+        Route::delete('/{id}', [App\Http\Controllers\PaymentInController::class, 'destroy']);
+    });
+    
+    // Sales Invoice routes
+    Route::prefix('sales-invoices')->group(function () {
+        Route::get('/', [App\Http\Controllers\SalesInvoiceController::class, 'index']);
+        Route::post('/', [App\Http\Controllers\SalesInvoiceController::class, 'store']);
+        Route::get('/next-number', [App\Http\Controllers\SalesInvoiceController::class, 'getNextInvoiceNumber']);
+        Route::get('/{id}', [App\Http\Controllers\SalesInvoiceController::class, 'show']);
+        Route::put('/{id}', [App\Http\Controllers\SalesInvoiceController::class, 'update']);
+        Route::delete('/{id}', [App\Http\Controllers\SalesInvoiceController::class, 'destroy']);
+    });
+    
+    // Sales Return routes
+    Route::prefix('sales-returns')->group(function () {
+        Route::get('/', [App\Http\Controllers\SalesReturnController::class, 'index']);
+        Route::post('/', [App\Http\Controllers\SalesReturnController::class, 'store']);
+        Route::get('/next-number', [App\Http\Controllers\SalesReturnController::class, 'getNextReturnNumber']);
+        Route::get('/{id}', [App\Http\Controllers\SalesReturnController::class, 'show']);
+        Route::put('/{id}', [App\Http\Controllers\SalesReturnController::class, 'update']);
+        Route::delete('/{id}', [App\Http\Controllers\SalesReturnController::class, 'destroy']);
+    });
+    
+    // Credit Note routes
+    Route::prefix('credit-notes')->group(function () {
+        Route::get('/', [App\Http\Controllers\CreditNoteController::class, 'index']);
+        Route::post('/', [App\Http\Controllers\CreditNoteController::class, 'store']);
+        Route::get('/next-number', [App\Http\Controllers\CreditNoteController::class, 'getNextNumber']);
+        Route::get('/{id}', [App\Http\Controllers\CreditNoteController::class, 'show']);
+        Route::put('/{id}', [App\Http\Controllers\CreditNoteController::class, 'update']);
+        Route::delete('/{id}', [App\Http\Controllers\CreditNoteController::class, 'destroy']);
+    });
+    
     // User profile routes
     Route::prefix('user')->group(function () {
         Route::get('/profile', [App\Http\Controllers\ProfileController::class, 'show']);

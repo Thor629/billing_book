@@ -96,7 +96,10 @@ class _AuthWrapperState extends State<AuthWrapper> {
   Future<void> _loadOrganizations(BuildContext context) async {
     if (_organizationsLoaded || _isLoadingOrganizations) return;
 
-    _isLoadingOrganizations = true;
+    setState(() {
+      _isLoadingOrganizations = true;
+    });
+
     final orgProvider =
         Provider.of<OrganizationProvider>(context, listen: false);
     await orgProvider.loadOrganizations();
@@ -122,7 +125,14 @@ class _AuthWrapperState extends State<AuthWrapper> {
         if (authProvider.isLoading) {
           return const Scaffold(
             body: Center(
-              child: CircularProgressIndicator(),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Loading...'),
+                ],
+              ),
             ),
           );
         }
@@ -141,13 +151,35 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
         // Regular users need organization selection
         // Load organizations if not loaded yet
-        if (!_organizationsLoaded) {
-          if (!_isLoadingOrganizations) {
+        if (!_organizationsLoaded && !_isLoadingOrganizations) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
             _loadOrganizations(context);
-          }
+          });
           return const Scaffold(
             body: Center(
-              child: CircularProgressIndicator(),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Loading organizations...'),
+                ],
+              ),
+            ),
+          );
+        }
+
+        if (_isLoadingOrganizations) {
+          return const Scaffold(
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Loading organizations...'),
+                ],
+              ),
             ),
           );
         }

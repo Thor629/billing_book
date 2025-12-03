@@ -10,6 +10,11 @@ import 'organizations_screen.dart';
 import 'parties_screen.dart';
 import 'items_screen_enhanced.dart';
 import 'godowns_screen.dart';
+import 'sales_invoices_screen.dart';
+import 'quotations_screen.dart';
+import 'payment_in_screen.dart';
+import 'sales_return_screen.dart';
+import 'credit_note_screen.dart';
 
 class UserDashboard extends StatefulWidget {
   const UserDashboard({super.key});
@@ -21,6 +26,7 @@ class UserDashboard extends StatefulWidget {
 class _UserDashboardState extends State<UserDashboard> {
   int _currentScreen = 0;
   bool _itemsMenuExpanded = false;
+  bool _salesMenuExpanded = false;
 
   @override
   Widget build(BuildContext context) {
@@ -117,6 +123,72 @@ class _UserDashboardState extends State<UserDashboard> {
                             ),
                           ],
                         ),
+                        // Expandable Sales Menu
+                        _buildExpandableMenuItem(
+                          icon: Icons.receipt_long_outlined,
+                          label: 'Sales',
+                          isExpanded: _salesMenuExpanded,
+                          onTap: () => setState(
+                              () => _salesMenuExpanded = !_salesMenuExpanded),
+                          children: [
+                            _buildSubMenuItem(
+                              label: 'Quotation / Estimate',
+                              isActive: _currentScreen == 7,
+                              onTap: () => setState(() {
+                                _currentScreen = 7;
+                                _salesMenuExpanded = true;
+                              }),
+                            ),
+                            _buildSubMenuItem(
+                              label: 'Sales Invoices',
+                              isActive: _currentScreen == 8,
+                              onTap: () => setState(() {
+                                _currentScreen = 8;
+                                _salesMenuExpanded = true;
+                              }),
+                            ),
+                            _buildSubMenuItem(
+                              label: 'Payment In',
+                              isActive: _currentScreen == 9,
+                              onTap: () => setState(() {
+                                _currentScreen = 9;
+                                _salesMenuExpanded = true;
+                              }),
+                            ),
+                            _buildSubMenuItem(
+                              label: 'Sales Return',
+                              isActive: _currentScreen == 10,
+                              onTap: () => setState(() {
+                                _currentScreen = 10;
+                                _salesMenuExpanded = true;
+                              }),
+                            ),
+                            _buildSubMenuItem(
+                              label: 'Credit Note',
+                              isActive: _currentScreen == 11,
+                              onTap: () => setState(() {
+                                _currentScreen = 11;
+                                _salesMenuExpanded = true;
+                              }),
+                            ),
+                            _buildSubMenuItem(
+                              label: 'Delivery Challan',
+                              isActive: _currentScreen == 12,
+                              onTap: () => setState(() {
+                                _currentScreen = 12;
+                                _salesMenuExpanded = true;
+                              }),
+                            ),
+                            _buildSubMenuItem(
+                              label: 'Proforma Invoice',
+                              isActive: _currentScreen == 13,
+                              onTap: () => setState(() {
+                                _currentScreen = 13;
+                                _salesMenuExpanded = true;
+                              }),
+                            ),
+                          ],
+                        ),
                         _buildMenuItem(
                           icon: Icons.person_outlined,
                           label: 'My Profile',
@@ -193,9 +265,66 @@ class _UserDashboardState extends State<UserDashboard> {
         return const ProfileScreen();
       case 6:
         return const PlansScreen();
+      case 7:
+        return const QuotationsScreen();
+      case 8:
+        return const SalesInvoicesScreen();
+      case 9:
+        return const PaymentInScreen();
+      case 10:
+        return const SalesReturnScreen();
+      case 11:
+        return const CreditNoteScreen();
+      case 12:
+        return _buildPlaceholderScreen('Delivery Challan');
+      case 13:
+        return _buildPlaceholderScreen('Proforma Invoice');
       default:
         return _buildDashboard();
     }
+  }
+
+  Widget _buildPlaceholderScreen(String title) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: AppTextStyles.h1),
+          const SizedBox(height: 24),
+          Expanded(
+            child: Card(
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.construction_outlined,
+                      size: 64,
+                      color: Colors.grey[400],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      '$title - Coming Soon',
+                      style: AppTextStyles.h3.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'This feature is under development',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildDashboard() {

@@ -840,7 +840,11 @@ class _ItemsScreenEnhancedState extends State<ItemsScreenEnhanced> {
                 color: Colors.transparent,
                 child: Container(
                   width: MediaQuery.of(context).size.width * 0.6,
-                  constraints: const BoxConstraints(maxWidth: 600),
+                  height: MediaQuery.of(context).size.height * 0.8,
+                  constraints: const BoxConstraints(
+                    maxWidth: 600,
+                    maxHeight: 700,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
@@ -853,7 +857,6 @@ class _ItemsScreenEnhancedState extends State<ItemsScreenEnhanced> {
                     ],
                   ),
                   child: Column(
-                    mainAxisSize: MainAxisSize.min,
                     children: [
                       // Header
                       Container(
@@ -885,58 +888,60 @@ class _ItemsScreenEnhancedState extends State<ItemsScreenEnhanced> {
                           ],
                         ),
                       ),
-                      // Content
-                      SingleChildScrollView(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _buildDetailRow('Item Code', item.itemCode),
-                            _buildDetailRow(
-                                'Category', item.category ?? 'Not specified'),
-                            _buildDetailRow('Unit', item.unit),
-                            const Divider(height: 32),
-                            Text('Pricing',
-                                style: AppTextStyles.h3
-                                    .copyWith(color: AppColors.primaryDark)),
-                            const SizedBox(height: 12),
-                            _buildDetailRow('Selling Price',
-                                '₹${item.sellingPrice.toStringAsFixed(2)}'),
-                            _buildDetailRow('Purchase Price',
-                                '₹${item.purchasePrice.toStringAsFixed(2)}'),
-                            _buildDetailRow(
-                                'MRP', '₹${item.mrp.toStringAsFixed(2)}'),
-                            _buildDetailRow('GST Rate', '${item.gstRate}%'),
-                            const Divider(height: 32),
-                            Text('Stock',
-                                style: AppTextStyles.h3
-                                    .copyWith(color: AppColors.primaryDark)),
-                            const SizedBox(height: 12),
-                            _buildDetailRow('Current Stock',
-                                '${item.stockQty} ${item.unit}'),
-                            _buildDetailRow('Low Stock Alert',
-                                '${item.lowStockAlert} ${item.unit}'),
-                            _buildDetailRow(
-                                'Status',
-                                item.isLowStock
-                                    ? 'Low Stock ⚠️'
-                                    : 'In Stock ✓'),
-                            if (item.description != null &&
-                                item.description!.isNotEmpty) ...[
+                      // Content - Now properly scrollable
+                      Expanded(
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildDetailRow('Item Code', item.itemCode),
+                              _buildDetailRow(
+                                  'Category', item.category ?? 'Not specified'),
+                              _buildDetailRow('Unit', item.unit),
                               const Divider(height: 32),
-                              Text('Description',
+                              Text('Pricing',
                                   style: AppTextStyles.h3
                                       .copyWith(color: AppColors.primaryDark)),
                               const SizedBox(height: 12),
-                              Text(item.description!,
-                                  style: AppTextStyles.bodyMedium),
-                            ],
-                            if (item.hsnCode != null &&
-                                item.hsnCode!.isNotEmpty) ...[
+                              _buildDetailRow('Selling Price',
+                                  '₹${item.sellingPrice.toStringAsFixed(2)}'),
+                              _buildDetailRow('Purchase Price',
+                                  '₹${item.purchasePrice.toStringAsFixed(2)}'),
+                              _buildDetailRow(
+                                  'MRP', '₹${item.mrp.toStringAsFixed(2)}'),
+                              _buildDetailRow('GST Rate', '${item.gstRate}%'),
                               const Divider(height: 32),
-                              _buildDetailRow('HSN Code', item.hsnCode!),
+                              Text('Stock',
+                                  style: AppTextStyles.h3
+                                      .copyWith(color: AppColors.primaryDark)),
+                              const SizedBox(height: 12),
+                              _buildDetailRow('Current Stock',
+                                  '${item.stockQty} ${item.unit}'),
+                              _buildDetailRow('Low Stock Alert',
+                                  '${item.lowStockAlert} ${item.unit}'),
+                              _buildDetailRow(
+                                  'Status',
+                                  item.isLowStock
+                                      ? 'Low Stock ⚠️'
+                                      : 'In Stock ✓'),
+                              if (item.description != null &&
+                                  item.description!.isNotEmpty) ...[
+                                const Divider(height: 32),
+                                Text('Description',
+                                    style: AppTextStyles.h3.copyWith(
+                                        color: AppColors.primaryDark)),
+                                const SizedBox(height: 12),
+                                Text(item.description!,
+                                    style: AppTextStyles.bodyMedium),
+                              ],
+                              if (item.hsnCode != null &&
+                                  item.hsnCode!.isNotEmpty) ...[
+                                const Divider(height: 32),
+                                _buildDetailRow('HSN Code', item.hsnCode!),
+                              ],
                             ],
-                          ],
+                          ),
                         ),
                       ),
                     ],
