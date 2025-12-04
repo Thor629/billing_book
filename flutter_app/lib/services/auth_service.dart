@@ -69,6 +69,11 @@ class AuthService {
     return token != null;
   }
 
+  // Get token
+  Future<String?> getToken() async {
+    return await _apiClient.getToken();
+  }
+
   // Register
   Future<Map<String, dynamic>> register({
     required String name,

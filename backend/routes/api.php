@@ -116,6 +116,69 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/{id}', [App\Http\Controllers\CreditNoteController::class, 'destroy']);
     });
     
+    // Purchase Invoice routes
+    Route::prefix('purchase-invoices')->group(function () {
+        Route::get('/', [App\Http\Controllers\PurchaseInvoiceController::class, 'index']);
+        Route::post('/', [App\Http\Controllers\PurchaseInvoiceController::class, 'store']);
+        Route::get('/next-number', [App\Http\Controllers\PurchaseInvoiceController::class, 'getNextInvoiceNumber']);
+        Route::get('/{id}', [App\Http\Controllers\PurchaseInvoiceController::class, 'show']);
+        Route::put('/{id}', [App\Http\Controllers\PurchaseInvoiceController::class, 'update']);
+        Route::delete('/{id}', [App\Http\Controllers\PurchaseInvoiceController::class, 'destroy']);
+    });
+    
+    // Payment Out routes
+    Route::prefix('payment-outs')->group(function () {
+        Route::get('/', [App\Http\Controllers\PaymentOutController::class, 'index']);
+        Route::post('/', [App\Http\Controllers\PaymentOutController::class, 'store']);
+        Route::get('/next-number', [App\Http\Controllers\PaymentOutController::class, 'getNextPaymentNumber']);
+        Route::get('/{id}', [App\Http\Controllers\PaymentOutController::class, 'show']);
+        Route::delete('/{id}', [App\Http\Controllers\PaymentOutController::class, 'destroy']);
+    });
+    
+    // Purchase Return routes
+    Route::prefix('purchase-returns')->group(function () {
+        Route::get('/', [App\Http\Controllers\PurchaseReturnController::class, 'index']);
+        Route::post('/', [App\Http\Controllers\PurchaseReturnController::class, 'store']);
+        Route::get('/next-number', [App\Http\Controllers\PurchaseReturnController::class, 'getNextReturnNumber']);
+        Route::get('/{id}', [App\Http\Controllers\PurchaseReturnController::class, 'show']);
+        Route::delete('/{id}', [App\Http\Controllers\PurchaseReturnController::class, 'destroy']);
+    });
+    
+    // Debit Note routes
+    Route::prefix('debit-notes')->group(function () {
+        Route::get('/', [App\Http\Controllers\DebitNoteController::class, 'index']);
+        Route::post('/', [App\Http\Controllers\DebitNoteController::class, 'store']);
+        Route::get('/next-number', [App\Http\Controllers\DebitNoteController::class, 'getNextNumber']);
+        Route::get('/{id}', [App\Http\Controllers\DebitNoteController::class, 'show']);
+        Route::delete('/{id}', [App\Http\Controllers\DebitNoteController::class, 'destroy']);
+    });
+    
+    // Purchase Order routes
+    Route::prefix('purchase-orders')->group(function () {
+        Route::get('/', [App\Http\Controllers\PurchaseOrderController::class, 'index']);
+        Route::post('/', [App\Http\Controllers\PurchaseOrderController::class, 'store']);
+        Route::get('/next-number', [App\Http\Controllers\PurchaseOrderController::class, 'getNextOrderNumber']);
+        Route::get('/{id}', [App\Http\Controllers\PurchaseOrderController::class, 'show']);
+        Route::put('/{id}', [App\Http\Controllers\PurchaseOrderController::class, 'update']);
+        Route::delete('/{id}', [App\Http\Controllers\PurchaseOrderController::class, 'destroy']);
+    });
+    
+    // Bank Account routes
+    Route::prefix('bank-accounts')->group(function () {
+        Route::get('/', [App\Http\Controllers\BankAccountController::class, 'index']);
+        Route::post('/', [App\Http\Controllers\BankAccountController::class, 'store']);
+        Route::get('/{id}', [App\Http\Controllers\BankAccountController::class, 'show']);
+        Route::put('/{id}', [App\Http\Controllers\BankAccountController::class, 'update']);
+        Route::delete('/{id}', [App\Http\Controllers\BankAccountController::class, 'destroy']);
+    });
+    
+    // Bank Transaction routes
+    Route::prefix('bank-transactions')->group(function () {
+        Route::get('/', [App\Http\Controllers\BankTransactionController::class, 'index']);
+        Route::post('/', [App\Http\Controllers\BankTransactionController::class, 'store']);
+        Route::post('/transfer', [App\Http\Controllers\BankTransactionController::class, 'transfer']);
+    });
+    
     // User profile routes
     Route::prefix('user')->group(function () {
         Route::get('/profile', [App\Http\Controllers\ProfileController::class, 'show']);

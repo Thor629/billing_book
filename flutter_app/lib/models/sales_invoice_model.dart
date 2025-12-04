@@ -26,6 +26,20 @@ class SalesInvoice {
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
+  // E-Invoice specific fields
+  final String? irn;
+  final String? ackNo;
+  final DateTime? ackDate;
+  final String? qrCodeData;
+  final String? qrCodeImage;
+  final String? signedInvoice;
+  final String? wayBillNo;
+  final DateTime? wayBillDate;
+  final String invoiceStatus;
+  final bool isEInvoiceGenerated;
+  final bool isReconciled;
+  final DateTime? reconciledAt;
+
   // Related models
   final PartyBasic? party;
   final List<SalesInvoiceItem>? items;
@@ -57,6 +71,18 @@ class SalesInvoice {
     required this.autoRoundOff,
     this.createdAt,
     this.updatedAt,
+    this.irn,
+    this.ackNo,
+    this.ackDate,
+    this.qrCodeData,
+    this.qrCodeImage,
+    this.signedInvoice,
+    this.wayBillNo,
+    this.wayBillDate,
+    this.invoiceStatus = 'draft',
+    this.isEInvoiceGenerated = false,
+    this.isReconciled = false,
+    this.reconciledAt,
     this.party,
     this.items,
   });
@@ -93,6 +119,23 @@ class SalesInvoice {
       updatedAt: json['updated_at'] != null
           ? DateTime.parse(json['updated_at'])
           : null,
+      irn: json['irn'],
+      ackNo: json['ack_no'],
+      ackDate:
+          json['ack_date'] != null ? DateTime.parse(json['ack_date']) : null,
+      qrCodeData: json['qr_code_data'],
+      qrCodeImage: json['qr_code_image'],
+      signedInvoice: json['signed_invoice'],
+      wayBillNo: json['way_bill_no'],
+      wayBillDate: json['way_bill_date'] != null
+          ? DateTime.parse(json['way_bill_date'])
+          : null,
+      invoiceStatus: json['invoice_status'] ?? 'draft',
+      isEInvoiceGenerated: json['is_einvoice_generated'] ?? false,
+      isReconciled: json['is_reconciled'] ?? false,
+      reconciledAt: json['reconciled_at'] != null
+          ? DateTime.parse(json['reconciled_at'])
+          : null,
       party: json['party'] != null ? PartyBasic.fromJson(json['party']) : null,
       items: json['items'] != null
           ? (json['items'] as List)
@@ -128,6 +171,18 @@ class SalesInvoice {
       'bank_details': bankDetails,
       'show_bank_details': showBankDetails,
       'auto_round_off': autoRoundOff,
+      'irn': irn,
+      'ack_no': ackNo,
+      'ack_date': ackDate?.toIso8601String(),
+      'qr_code_data': qrCodeData,
+      'qr_code_image': qrCodeImage,
+      'signed_invoice': signedInvoice,
+      'way_bill_no': wayBillNo,
+      'way_bill_date': wayBillDate?.toIso8601String(),
+      'invoice_status': invoiceStatus,
+      'is_einvoice_generated': isEInvoiceGenerated,
+      'is_reconciled': isReconciled,
+      'reconciled_at': reconciledAt?.toIso8601String(),
     };
   }
 
@@ -149,6 +204,16 @@ class SalesInvoice {
     if (paymentStatus == 'paid') return false;
     return DateTime.now().isAfter(dueDate);
   }
+
+  bool get isDraft => invoiceStatus == 'draft';
+
+  bool get isFinal => invoiceStatus == 'final';
+
+  bool get isEditable => isDraft && !isEInvoiceGenerated;
+
+  bool get hasIRN => irn != null && irn!.isNotEmpty;
+
+  bool get hasWayBill => wayBillNo != null && wayBillNo!.isNotEmpty;
 }
 
 class SalesInvoiceItem {

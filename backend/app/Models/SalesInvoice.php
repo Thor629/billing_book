@@ -34,6 +34,19 @@ class SalesInvoice extends Model
         'bank_details',
         'show_bank_details',
         'auto_round_off',
+        // E-Invoice fields
+        'irn',
+        'ack_no',
+        'ack_date',
+        'qr_code_data',
+        'qr_code_image',
+        'signed_invoice',
+        'way_bill_no',
+        'way_bill_date',
+        'invoice_status',
+        'is_einvoice_generated',
+        'is_reconciled',
+        'reconciled_at',
     ];
 
     protected $casts = [
@@ -49,6 +62,12 @@ class SalesInvoice extends Model
         'balance_amount' => 'decimal:2',
         'show_bank_details' => 'boolean',
         'auto_round_off' => 'boolean',
+        // E-Invoice casts
+        'ack_date' => 'datetime',
+        'way_bill_date' => 'datetime',
+        'is_einvoice_generated' => 'boolean',
+        'is_reconciled' => 'boolean',
+        'reconciled_at' => 'datetime',
     ];
 
     public function organization()
@@ -108,5 +127,30 @@ class SalesInvoice extends Model
         
         $days = $dueDate->diffInDays($today);
         return "{$days} Days";
+    }
+
+    public function getIsDraftAttribute()
+    {
+        return $this->invoice_status === 'draft';
+    }
+
+    public function getIsFinalAttribute()
+    {
+        return $this->invoice_status === 'final';
+    }
+
+    public function getIsEditableAttribute()
+    {
+        return $this->is_draft && !$this->is_einvoice_generated;
+    }
+
+    public function getHasIrnAttribute()
+    {
+        return !empty($this->irn);
+    }
+
+    public function getHasWayBillAttribute()
+    {
+        return !empty($this->way_bill_no);
     }
 }

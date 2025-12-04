@@ -15,6 +15,8 @@ import 'quotations_screen.dart';
 import 'payment_in_screen.dart';
 import 'sales_return_screen.dart';
 import 'credit_note_screen.dart';
+import 'purchase_invoices_screen.dart';
+import 'cash_bank_screen.dart';
 
 class UserDashboard extends StatefulWidget {
   const UserDashboard({super.key});
@@ -27,6 +29,7 @@ class _UserDashboardState extends State<UserDashboard> {
   int _currentScreen = 0;
   bool _itemsMenuExpanded = false;
   bool _salesMenuExpanded = false;
+  bool _purchasesMenuExpanded = false;
 
   @override
   Widget build(BuildContext context) {
@@ -66,7 +69,7 @@ class _UserDashboardState extends State<UserDashboard> {
                       Text(
                         authProvider.user?.email ?? '',
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: AppColors.textLight.withOpacity(0.7),
+                          color: AppColors.textLight.withValues(alpha: 0.7),
                         ),
                       ),
                     ],
@@ -189,6 +192,146 @@ class _UserDashboardState extends State<UserDashboard> {
                             ),
                           ],
                         ),
+                        // Expandable Purchases Menu
+                        _buildExpandableMenuItem(
+                          icon: Icons.shopping_bag_outlined,
+                          label: 'Purchases',
+                          isExpanded: _purchasesMenuExpanded,
+                          onTap: () => setState(() =>
+                              _purchasesMenuExpanded = !_purchasesMenuExpanded),
+                          children: [
+                            _buildSubMenuItem(
+                              label: 'Purchase Invoices',
+                              isActive: _currentScreen == 14,
+                              onTap: () => setState(() {
+                                _currentScreen = 14;
+                                _purchasesMenuExpanded = true;
+                              }),
+                            ),
+                            _buildSubMenuItem(
+                              label: 'Payment Out',
+                              isActive: _currentScreen == 15,
+                              onTap: () => setState(() {
+                                _currentScreen = 15;
+                                _purchasesMenuExpanded = true;
+                              }),
+                            ),
+                            _buildSubMenuItem(
+                              label: 'Purchase Return',
+                              isActive: _currentScreen == 16,
+                              onTap: () => setState(() {
+                                _currentScreen = 16;
+                                _purchasesMenuExpanded = true;
+                              }),
+                            ),
+                            _buildSubMenuItem(
+                              label: 'Debit Note',
+                              isActive: _currentScreen == 17,
+                              onTap: () => setState(() {
+                                _currentScreen = 17;
+                                _purchasesMenuExpanded = true;
+                              }),
+                            ),
+                            _buildSubMenuItem(
+                              label: 'Purchase Orders',
+                              isActive: _currentScreen == 18,
+                              onTap: () => setState(() {
+                                _currentScreen = 18;
+                                _purchasesMenuExpanded = true;
+                              }),
+                            ),
+                          ],
+                        ),
+
+                        // Section Header - Accounting Solutions
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+                          child: Text(
+                            'ACCOUNTING SOLUTIONS',
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: AppColors.textLight.withValues(alpha: 0.6),
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                        ),
+
+                        // Cash & Bank Menu Item
+                        _buildMenuItem(
+                          icon: Icons.account_balance_outlined,
+                          label: 'Cash & Bank',
+                          isActive: _currentScreen == 19,
+                          onTap: () => setState(() => _currentScreen = 19),
+                        ),
+                        _buildMenuItem(
+                          icon: Icons.receipt_outlined,
+                          label: 'E-Invoicing',
+                          isActive: _currentScreen == 22,
+                          onTap: () => setState(() => _currentScreen = 22),
+                        ),
+                        _buildMenuItem(
+                          icon: Icons.description_outlined,
+                          label: 'Automated Bills',
+                          isActive: _currentScreen == 23,
+                          onTap: () => setState(() => _currentScreen = 23),
+                        ),
+                        _buildMenuItem(
+                          icon: Icons.wallet_outlined,
+                          label: 'Expenses',
+                          isActive: _currentScreen == 24,
+                          onTap: () => setState(() => _currentScreen = 24),
+                        ),
+                        _buildMenuItem(
+                          icon: Icons.point_of_sale_outlined,
+                          label: 'POS Billing',
+                          isActive: _currentScreen == 25,
+                          onTap: () => setState(() => _currentScreen = 25),
+                        ),
+
+                        // Section Header - Business Tools
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+                          child: Text(
+                            'BUSINESS TOOLS',
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: AppColors.textLight.withValues(alpha: 0.6),
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                        ),
+
+                        _buildMenuItem(
+                          icon: Icons.calendar_today_outlined,
+                          label: 'Staff Attendance & Payroll',
+                          isActive: _currentScreen == 26,
+                          onTap: () => setState(() => _currentScreen = 26),
+                        ),
+                        _buildMenuItem(
+                          icon: Icons.manage_accounts_outlined,
+                          label: 'Manage Users',
+                          isActive: _currentScreen == 27,
+                          onTap: () => setState(() => _currentScreen = 27),
+                        ),
+                        _buildMenuItem(
+                          icon: Icons.shopping_cart_outlined,
+                          label: 'Online Orders',
+                          isActive: _currentScreen == 28,
+                          onTap: () => setState(() => _currentScreen = 28),
+                        ),
+                        _buildMenuItem(
+                          icon: Icons.sms_outlined,
+                          label: 'SMS Marketing',
+                          isActive: _currentScreen == 29,
+                          onTap: () => setState(() => _currentScreen = 29),
+                        ),
+                        _buildMenuItem(
+                          icon: Icons.request_quote_outlined,
+                          label: 'Apply For Loan',
+                          isActive: _currentScreen == 30,
+                          onTap: () => setState(() => _currentScreen = 30),
+                        ),
+
                         _buildMenuItem(
                           icon: Icons.person_outlined,
                           label: 'My Profile',
@@ -279,6 +422,38 @@ class _UserDashboardState extends State<UserDashboard> {
         return _buildPlaceholderScreen('Delivery Challan');
       case 13:
         return _buildPlaceholderScreen('Proforma Invoice');
+      case 14:
+        return const PurchaseInvoicesScreen();
+      case 15:
+        return _buildPlaceholderScreen('Payment Out');
+      case 16:
+        return _buildPlaceholderScreen('Purchase Return');
+      case 17:
+        return _buildPlaceholderScreen('Debit Note');
+      case 18:
+        return _buildPlaceholderScreen('Purchase Orders');
+      // Accounting Solutions
+      case 19:
+        return const CashBankScreen();
+      case 22:
+        return _buildPlaceholderScreen('E-Invoicing');
+      case 23:
+        return _buildPlaceholderScreen('Automated Bills');
+      case 24:
+        return _buildPlaceholderScreen('Expenses');
+      case 25:
+        return _buildPlaceholderScreen('POS Billing');
+      // Business Tools
+      case 26:
+        return _buildPlaceholderScreen('Staff Attendance & Payroll');
+      case 27:
+        return _buildPlaceholderScreen('Manage Users');
+      case 28:
+        return _buildPlaceholderScreen('Online Orders');
+      case 29:
+        return _buildPlaceholderScreen('SMS Marketing');
+      case 30:
+        return _buildPlaceholderScreen('Apply For Loan');
       default:
         return _buildDashboard();
     }

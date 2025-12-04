@@ -14,6 +14,11 @@ class AuthProvider with ChangeNotifier {
   String? get error => _error;
   bool get isAuthenticated => _user != null;
 
+  // Get token
+  Future<String?> get token async {
+    return await _authService.getToken();
+  }
+
   // Initialize - check if user is already logged in
   Future<void> initialize() async {
     _isLoading = true;
