@@ -16,6 +16,7 @@ import 'screens/user/user_dashboard.dart';
 import 'screens/organization/organization_selector_dialog.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
 
@@ -81,39 +82,12 @@ class AuthWrapper extends StatefulWidget {
 }
 
 class _AuthWrapperState extends State<AuthWrapper> {
-  bool _organizationsLoaded = false;
-  bool _isLoadingOrganizations = false;
-
   @override
   void initState() {
     super.initState();
     // Initialize auth state
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<AuthProvider>(context, listen: false).initialize();
-    });
-  }
-
-  Future<void> _loadOrganizations(BuildContext context) async {
-    if (_organizationsLoaded || _isLoadingOrganizations) return;
-
-    setState(() {
-      _isLoadingOrganizations = true;
-    });
-
-    final orgProvider =
-        Provider.of<OrganizationProvider>(context, listen: false);
-    await orgProvider.loadOrganizations();
-
-    if (!mounted) return;
-
-    // Auto-select if only one organization (Requirement 18.2)
-    if (orgProvider.organizations.length == 1) {
-      orgProvider.selectOrganization(orgProvider.organizations.first);
-    }
-
-    setState(() {
-      _organizationsLoaded = true;
-      _isLoadingOrganizations = false;
     });
   }
 
@@ -139,8 +113,6 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
         // Not authenticated - show login
         if (!authProvider.isAuthenticated) {
-          _organizationsLoaded = false; // Reset on logout
-          _isLoadingOrganizations = false;
           return const LoginScreen();
         }
 
@@ -150,48 +122,13 @@ class _AuthWrapperState extends State<AuthWrapper> {
         }
 
         // Regular users need organization selection
-        // Load organizations if not loaded yet
-        if (!_organizationsLoaded && !_isLoadingOrganizations) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            _loadOrganizations(context);
-          });
-          return const Scaffold(
-            body: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('Loading organizations...'),
-                ],
-              ),
-            ),
-          );
-        }
-
-        if (_isLoadingOrganizations) {
-          return const Scaffold(
-            body: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('Loading organizations...'),
-                ],
-              ),
-            ),
-          );
-        }
-
         // Show organization selector if no organization selected
-        // Requirement 18.1: No organizations → create screen
-        // Requirement 18.3: Multiple organizations → selection screen
+        // The dialog handles loading organizations internally
         if (!orgProvider.hasOrganization) {
           return const OrganizationSelectorDialog();
         }
 
-        // Organization selected - show user dashboard (Requirement 18.4, 18.5)
+        // Organization selected - show user dashboard
         return const UserDashboard();
       },
     );

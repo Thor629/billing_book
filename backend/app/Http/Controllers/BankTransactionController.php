@@ -15,6 +15,10 @@ class BankTransactionController extends Controller
     {
         $query = BankTransaction::where('user_id', Auth::id());
 
+        if ($request->has('organization_id')) {
+            $query->where('organization_id', $request->organization_id);
+        }
+
         if ($request->has('account_id')) {
             $query->where('account_id', $request->account_id);
         }

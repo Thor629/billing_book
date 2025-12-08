@@ -16,22 +16,42 @@ class OrganizationSelectorDialog extends StatefulWidget {
 
 class _OrganizationSelectorDialogState
     extends State<OrganizationSelectorDialog> {
+  bool _isInitialized = false;
+
   @override
   void initState() {
     super.initState();
-    _loadOrganizations();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadOrganizations();
+    });
   }
 
   Future<void> _loadOrganizations() async {
+    if (_isInitialized) return;
+    _isInitialized = true;
+
+    print('OrganizationSelectorDialog: Starting to load organizations');
     final orgProvider =
         Provider.of<OrganizationProvider>(context, listen: false);
-    await orgProvider.loadOrganizations();
+
+    print(
+        'OrganizationSelectorDialog: Current state - orgs: ${orgProvider.organizations.length}, loading: ${orgProvider.isLoading}');
+
+    // Only load if not already loaded
+    if (orgProvider.organizations.isEmpty && !orgProvider.isLoading) {
+      print('OrganizationSelectorDialog: Calling loadOrganizations');
+      await orgProvider.loadOrganizations();
+    }
 
     if (!mounted) return;
 
+    print(
+        'OrganizationSelectorDialog: After load - orgs: ${orgProvider.organizations.length}, hasOrg: ${orgProvider.hasOrganization}');
+
     // Auto-select if only one organization
-    if (orgProvider.organizations.length == 1) {
-      orgProvider.selectOrganization(orgProvider.organizations.first);
+    if (orgProvider.organizations.length == 1 && !orgProvider.hasOrganization) {
+      print('OrganizationSelectorDialog: Auto-selecting single organization');
+      await orgProvider.selectOrganization(orgProvider.organizations.first);
     }
   }
 
@@ -49,6 +69,33 @@ class _OrganizationSelectorDialogState
 
         // If no organizations, show create form
         if (orgProvider.organizations.isEmpty) {
+          // Show error if there was one
+          if (orgProvider.error != null) {
+            return Scaffold(
+              body: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.error_outline,
+                        size: 64, color: Colors.red),
+                    const SizedBox(height: 16),
+                    Text('Error loading organizations',
+                        style: AppTextStyles.h2),
+                    const SizedBox(height: 8),
+                    Text(orgProvider.error!, style: AppTextStyles.bodyMedium),
+                    const SizedBox(height: 24),
+                    ElevatedButton(
+                      onPressed: () {
+                        setState(() => _isInitialized = false);
+                        _loadOrganizations();
+                      },
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
           return const CreateOrganizationScreen();
         }
 

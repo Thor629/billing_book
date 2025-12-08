@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 import '../../services/payment_in_service.dart';
 import '../../services/party_service.dart';
 import '../../models/party_model.dart';
@@ -25,8 +26,11 @@ class _CreatePaymentInScreenState extends State<CreatePaymentInScreen> {
   String _paymentMode = 'Cash';
   int? _selectedPartyId;
   String? _selectedPartyName;
+  int? _selectedBankAccountId;
+  String? _selectedBankAccountName;
   bool _isSaving = false;
   List<PartyModel> _parties = [];
+  List<dynamic> _bankAccounts = [];
 
   @override
   Widget build(BuildContext context) {
@@ -279,11 +283,91 @@ class _CreatePaymentInScreenState extends State<CreatePaymentInScreen> {
                       ],
                       onChanged: (value) {
                         if (value != null) {
-                          setState(() => _paymentMode = value);
+                          setState(() {
+                            _paymentMode = value;
+                            // Reset bank account selection when switching to/from cash
+                            if (value == 'Cash') {
+                              _selectedBankAccountId = null;
+                              _selectedBankAccountName = null;
+                            } else {
+                              _loadBankAccounts();
+                            }
+                          });
                         }
                       },
                     ),
                     const SizedBox(height: 16),
+
+                    // Bank Account Selection (only show for non-cash payments)
+                    if (_paymentMode != 'Cash') ...[
+                      const Text(
+                        'Bank Account',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.grey,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _bankAccounts.isEmpty
+                          ? Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 12),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey[300]!),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                children: [
+                                  const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    'Loading bank accounts...',
+                                    style: TextStyle(color: Colors.grey[600]),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : DropdownButtonFormField<int>(
+                              value: _selectedBankAccountId,
+                              decoration: InputDecoration(
+                                hintText: 'Select bank account',
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 12),
+                              ),
+                              items: _bankAccounts
+                                  .map((account) => DropdownMenuItem<int>(
+                                        value: account['id'],
+                                        child: Text(
+                                          '${account['account_name']} - ₹${NumberFormat('#,##,###.##').format(double.parse(account['current_balance'].toString()))}',
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ))
+                                  .toList(),
+                              onChanged: (value) {
+                                if (value != null) {
+                                  final account = _bankAccounts.firstWhere(
+                                    (acc) => acc['id'] == value,
+                                  );
+                                  setState(() {
+                                    _selectedBankAccountId = value;
+                                    _selectedBankAccountName =
+                                        account['account_name'];
+                                  });
+                                }
+                              },
+                            ),
+                      const SizedBox(height: 16),
+                    ],
 
                     // Payment In Number
                     const Text(
@@ -477,6 +561,24 @@ class _CreatePaymentInScreenState extends State<CreatePaymentInScreen> {
     }
   }
 
+  Future<void> _loadBankAccounts() async {
+    final orgProvider =
+        Provider.of<OrganizationProvider>(context, listen: false);
+
+    if (orgProvider.selectedOrganization == null) return;
+
+    try {
+      final response = await _paymentService
+          .getBankAccounts(orgProvider.selectedOrganization!.id);
+      setState(() {
+        _bankAccounts = response;
+      });
+    } catch (e) {
+      // Silently fail - user can still proceed without selecting bank account
+      print('Error loading bank accounts: $e');
+    }
+  }
+
   Future<void> _savePayment() async {
     final orgProvider =
         Provider.of<OrganizationProvider>(context, listen: false);
@@ -506,6 +608,14 @@ class _CreatePaymentInScreenState extends State<CreatePaymentInScreen> {
       return;
     }
 
+    // Validate bank account for non-cash payments
+    if (_paymentMode != 'Cash' && _selectedBankAccountId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a bank account')),
+      );
+      return;
+    }
+
     setState(() => _isSaving = true);
 
     try {
@@ -517,6 +627,8 @@ class _CreatePaymentInScreenState extends State<CreatePaymentInScreen> {
         'amount': amount,
         'payment_mode': _paymentMode,
         'notes': _notesController.text.isEmpty ? null : _notesController.text,
+        if (_selectedBankAccountId != null)
+          'bank_account_id': _selectedBankAccountId,
       };
 
       await _paymentService.createPayment(paymentData);
@@ -524,7 +636,9 @@ class _CreatePaymentInScreenState extends State<CreatePaymentInScreen> {
       if (mounted) {
         Navigator.pop(context, true); // Return true to indicate success
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Payment saved successfully')),
+          const SnackBar(
+              content: Text(
+                  'Payment saved and account balance updated successfully')),
         );
       }
     } catch (e) {

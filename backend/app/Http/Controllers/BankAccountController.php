@@ -19,7 +19,9 @@ class BankAccountController extends Controller
 
         $accounts = $query->orderBy('created_at', 'desc')->get();
 
-        return response()->json($accounts);
+        return response()->json([
+            'accounts' => $accounts
+        ]);
     }
 
     public function store(Request $request)

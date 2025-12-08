@@ -77,6 +77,11 @@ class ItemController extends Controller
         $customFields = $validated['custom_fields'] ?? [];
         unset($validated['party_prices'], $validated['custom_fields']);
 
+        // If stock_qty is not provided but opening_stock is, use opening_stock as initial stock_qty
+        if (!isset($validated['stock_qty']) && isset($validated['opening_stock'])) {
+            $validated['stock_qty'] = (int) $validated['opening_stock'];
+        }
+
         $item = Item::create($validated);
 
         // Create party prices

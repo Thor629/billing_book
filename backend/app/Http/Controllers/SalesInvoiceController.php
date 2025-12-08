@@ -12,8 +12,28 @@ class SalesInvoiceController extends Controller
 {
     public function index(Request $request)
     {
+        $organizationId = $request->query('organization_id');
+
+        if (!$organizationId) {
+            return response()->json([
+                'message' => 'Organization ID is required',
+            ], 400);
+        }
+
+        // Verify user has access to this organization
+        $hasAccess = $request->user()
+            ->organizations()
+            ->where('organizations.id', $organizationId)
+            ->exists();
+
+        if (!$hasAccess) {
+            return response()->json([
+                'message' => 'Access denied to this organization',
+            ], 403);
+        }
+
         $query = SalesInvoice::with(['party', 'organization', 'user'])
-            ->where('organization_id', $request->user()->currentOrganization->id ?? null);
+            ->where('organization_id', $organizationId);
 
         // Filter by date range
         if ($request->has('date_filter')) {
@@ -48,12 +68,12 @@ class SalesInvoiceController extends Controller
 
         // Calculate summary
         $summary = [
-            'total_sales' => SalesInvoice::where('organization_id', $request->user()->currentOrganization->id ?? null)
+            'total_sales' => SalesInvoice::where('organization_id', $organizationId)
                 ->sum('total_amount'),
-            'paid' => SalesInvoice::where('organization_id', $request->user()->currentOrganization->id ?? null)
+            'paid' => SalesInvoice::where('organization_id', $organizationId)
                 ->where('payment_status', 'paid')
                 ->sum('total_amount'),
-            'unpaid' => SalesInvoice::where('organization_id', $request->user()->currentOrganization->id ?? null)
+            'unpaid' => SalesInvoice::where('organization_id', $organizationId)
                 ->whereIn('payment_status', ['unpaid', 'partial'])
                 ->sum('balance_amount'),
         ];
@@ -67,6 +87,7 @@ class SalesInvoiceController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
+            'organization_id' => 'required|exists:organizations,id',
             'party_id' => 'required|exists:parties,id',
             'invoice_prefix' => 'required|string|max:10',
             'invoice_number' => 'required|string|max:50',
@@ -79,16 +100,40 @@ class SalesInvoiceController extends Controller
             'items.*.price_per_unit' => 'required|numeric|min:0',
             'items.*.discount_percent' => 'nullable|numeric|min:0|max:100',
             'items.*.tax_percent' => 'nullable|numeric|min:0|max:100',
+            'bank_account_id' => 'nullable|exists:bank_accounts,id',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
+        // Validate stock availability
+        foreach ($request->items as $itemData) {
+            $item = \App\Models\Item::find($itemData['item_id']);
+            if ($item && $item->stock_qty < $itemData['quantity']) {
+                return response()->json([
+                    'message' => "Insufficient stock for item: {$item->item_name}. Available: {$item->stock_qty}, Required: {$itemData['quantity']}"
+                ], 422);
+            }
+        }
+
         try {
             DB::beginTransaction();
 
-            $organizationId = $request->user()->currentOrganization->id ?? null;
+            $organizationId = $request->organization_id;
+            
+            // Verify user has access to this organization
+            $hasAccess = $request->user()
+                ->organizations()
+                ->where('organizations.id', $organizationId)
+                ->exists();
+
+            if (!$hasAccess) {
+                DB::rollBack();
+                return response()->json([
+                    'message' => 'Access denied to this organization',
+                ], 403);
+            }
             
             // Check for duplicate invoice number
             $exists = SalesInvoice::where('organization_id', $organizationId)
@@ -137,6 +182,23 @@ class SalesInvoiceController extends Controller
                 $paymentStatus = 'partial';
             }
 
+            // Get bank details if bank_account_id is provided
+            $bankDetails = null;
+            if ($request->bank_account_id) {
+                $bankAccount = \App\Models\BankAccount::find($request->bank_account_id);
+                if ($bankAccount) {
+                    $bankDetails = json_encode([
+                        'account_name' => $bankAccount->account_name,
+                        'bank_account_no' => $bankAccount->bank_account_no,
+                        'ifsc_code' => $bankAccount->ifsc_code,
+                        'bank_name' => $bankAccount->bank_name,
+                        'branch_name' => $bankAccount->branch_name,
+                        'account_holder_name' => $bankAccount->account_holder_name,
+                        'upi_id' => $bankAccount->upi_id,
+                    ]);
+                }
+            }
+
             // Create invoice
             $invoice = SalesInvoice::create([
                 'organization_id' => $organizationId,
@@ -159,12 +221,12 @@ class SalesInvoiceController extends Controller
                 'payment_status' => $paymentStatus,
                 'notes' => $request->notes,
                 'terms_conditions' => $request->terms_conditions,
-                'bank_details' => $request->bank_details,
+                'bank_details' => $bankDetails ?? $request->bank_details,
                 'show_bank_details' => $request->show_bank_details ?? true,
                 'auto_round_off' => $request->auto_round_off ?? false,
             ]);
 
-            // Create invoice items
+            // Create invoice items and reduce stock
             foreach ($request->items as $itemData) {
                 $quantity = $itemData['quantity'];
                 $pricePerUnit = $itemData['price_per_unit'];
@@ -193,6 +255,54 @@ class SalesInvoiceController extends Controller
                     'tax_amount' => $taxAmount,
                     'line_total' => $lineTotal,
                 ]);
+
+                // Reduce stock quantity
+                $item = \App\Models\Item::find($itemData['item_id']);
+                if ($item) {
+                    $item->stock_qty = max(0, $item->stock_qty - $quantity);
+                    $item->save();
+                }
+            }
+
+            // Create bank transaction if payment is received
+            if ($amountReceived > 0) {
+                $accountId = $request->bank_account_id;
+                
+                // If no bank account selected (Cash payment), find or create default Cash account
+                if (!$accountId) {
+                    $cashAccount = \App\Models\BankAccount::firstOrCreate(
+                        [
+                            'organization_id' => $organizationId,
+                            'account_name' => 'Cash',
+                            'account_type' => 'cash',
+                        ],
+                        [
+                            'user_id' => $request->user()->id,
+                            'current_balance' => 0,
+                            'opening_balance' => 0,
+                            'opening_balance_date' => now(),
+                            'is_default' => false,
+                        ]
+                    );
+                    $accountId = $cashAccount->id;
+                }
+
+                \App\Models\BankTransaction::create([
+                    'account_id' => $accountId,
+                    'organization_id' => $organizationId,
+                    'user_id' => $request->user()->id,
+                    'transaction_type' => 'add',
+                    'amount' => $amountReceived,
+                    'transaction_date' => $request->invoice_date,
+                    'description' => 'Payment received for Sales Invoice ' . $request->invoice_prefix . $request->invoice_number . ' - ' . ($request->payment_mode ?? 'Cash'),
+                ]);
+
+                // Update bank account balance
+                $bankAccount = \App\Models\BankAccount::find($accountId);
+                if ($bankAccount) {
+                    $bankAccount->current_balance += $amountReceived;
+                    $bankAccount->save();
+                }
             }
 
             DB::commit();
@@ -291,13 +401,35 @@ class SalesInvoiceController extends Controller
     public function destroy($id)
     {
         try {
-            $invoice = SalesInvoice::findOrFail($id);
+            DB::beginTransaction();
+
+            $invoice = SalesInvoice::with('items')->findOrFail($id);
+
+            // Restore stock quantities before deleting
+            foreach ($invoice->items as $invoiceItem) {
+                $item = \App\Models\Item::find($invoiceItem->item_id);
+                if ($item) {
+                    $item->stock_qty += $invoiceItem->quantity;
+                    $item->save();
+                }
+            }
+
+            // Delete related bank transaction if exists
+            if ($invoice->amount_received > 0) {
+                \App\Models\BankTransaction::where('description', 'like', '%' . $invoice->invoice_prefix . $invoice->invoice_number . '%')
+                    ->where('organization_id', $invoice->organization_id)
+                    ->delete();
+            }
+
             $invoice->delete();
+
+            DB::commit();
 
             return response()->json([
                 'message' => 'Sales invoice deleted successfully'
             ]);
         } catch (\Exception $e) {
+            DB::rollBack();
             return response()->json([
                 'message' => 'Failed to delete sales invoice',
                 'error' => $e->getMessage()
@@ -308,7 +440,25 @@ class SalesInvoiceController extends Controller
     public function getNextInvoiceNumber(Request $request)
     {
         $prefix = $request->prefix ?? 'INV';
-        $organizationId = $request->user()->currentOrganization->id ?? null;
+        $organizationId = $request->query('organization_id');
+
+        if (!$organizationId) {
+            return response()->json([
+                'message' => 'Organization ID is required',
+            ], 400);
+        }
+
+        // Verify user has access to this organization
+        $hasAccess = $request->user()
+            ->organizations()
+            ->where('organizations.id', $organizationId)
+            ->exists();
+
+        if (!$hasAccess) {
+            return response()->json([
+                'message' => 'Access denied to this organization',
+            ], 403);
+        }
 
         $lastInvoice = SalesInvoice::where('organization_id', $organizationId)
             ->where('invoice_prefix', $prefix)

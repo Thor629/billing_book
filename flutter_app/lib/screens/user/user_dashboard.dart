@@ -17,6 +17,8 @@ import 'sales_return_screen.dart';
 import 'credit_note_screen.dart';
 import 'purchase_invoices_screen.dart';
 import 'cash_bank_screen.dart';
+import 'expenses_screen.dart';
+import 'delivery_challan_screen.dart';
 
 class UserDashboard extends StatefulWidget {
   const UserDashboard({super.key});
@@ -371,11 +373,12 @@ class _UserDashboardState extends State<UserDashboard> {
                         color: AppColors.textLight,
                       ),
                     ),
-                    onTap: () {
+                    onTap: () async {
                       // Clear organization data on logout
-                      Provider.of<OrganizationProvider>(context, listen: false)
+                      await Provider.of<OrganizationProvider>(context,
+                              listen: false)
                           .clearOrganization();
-                      authProvider.logout();
+                      await authProvider.logout();
                     },
                   ),
                 ),
@@ -419,7 +422,7 @@ class _UserDashboardState extends State<UserDashboard> {
       case 11:
         return const CreditNoteScreen();
       case 12:
-        return _buildPlaceholderScreen('Delivery Challan');
+        return const DeliveryChallanScreen();
       case 13:
         return _buildPlaceholderScreen('Proforma Invoice');
       case 14:
@@ -440,7 +443,7 @@ class _UserDashboardState extends State<UserDashboard> {
       case 23:
         return _buildPlaceholderScreen('Automated Bills');
       case 24:
-        return _buildPlaceholderScreen('Expenses');
+        return const ExpensesScreen();
       case 25:
         return _buildPlaceholderScreen('POS Billing');
       // Business Tools

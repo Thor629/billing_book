@@ -6,6 +6,7 @@ class SalesInvoiceService {
   final ApiClient _apiClient = ApiClient();
 
   Future<Map<String, dynamic>> getInvoices({
+    required int organizationId,
     String? dateFilter,
     String? paymentStatus,
     String? search,
@@ -14,6 +15,7 @@ class SalesInvoiceService {
   }) async {
     try {
       final queryParams = <String, String>{
+        'organization_id': organizationId.toString(),
         'page': page.toString(),
         'per_page': perPage.toString(),
       };
@@ -110,11 +112,13 @@ class SalesInvoiceService {
     }
   }
 
-  Future<Map<String, dynamic>> getNextInvoiceNumber(
-      {String prefix = 'INV'}) async {
+  Future<Map<String, dynamic>> getNextInvoiceNumber({
+    required int organizationId,
+    String prefix = 'INV',
+  }) async {
     try {
       final response = await _apiClient.get(
-        '/sales-invoices/next-number?prefix=${Uri.encodeComponent(prefix)}',
+        '/sales-invoices/next-number?organization_id=$organizationId&prefix=${Uri.encodeComponent(prefix)}',
       );
 
       if (response.statusCode == 200) {

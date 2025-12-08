@@ -40,9 +40,15 @@ class ApiClient {
   }
 
   // GET request
-  Future<http.Response> get(String endpoint, {bool includeAuth = true}) async {
+  Future<http.Response> get(String endpoint,
+      {bool includeAuth = true, Map<String, String>? customHeaders}) async {
     final url = Uri.parse('${AppConfig.apiBaseUrl}$endpoint');
     final headers = await _getHeaders(includeAuth: includeAuth);
+
+    // Add custom headers if provided
+    if (customHeaders != null) {
+      headers.addAll(customHeaders);
+    }
 
     try {
       final response = await _client
@@ -59,9 +65,15 @@ class ApiClient {
     String endpoint,
     Map<String, dynamic> body, {
     bool includeAuth = true,
+    Map<String, String>? customHeaders,
   }) async {
     final url = Uri.parse('${AppConfig.apiBaseUrl}$endpoint');
     final headers = await _getHeaders(includeAuth: includeAuth);
+
+    // Add custom headers if provided
+    if (customHeaders != null) {
+      headers.addAll(customHeaders);
+    }
 
     try {
       final response = await _client
@@ -113,9 +125,14 @@ class ApiClient {
 
   // DELETE request
   Future<http.Response> delete(String endpoint,
-      {bool includeAuth = true}) async {
+      {bool includeAuth = true, Map<String, String>? customHeaders}) async {
     final url = Uri.parse('${AppConfig.apiBaseUrl}$endpoint');
     final headers = await _getHeaders(includeAuth: includeAuth);
+
+    // Add custom headers if provided
+    if (customHeaders != null) {
+      headers.addAll(customHeaders);
+    }
 
     try {
       final response = await _client

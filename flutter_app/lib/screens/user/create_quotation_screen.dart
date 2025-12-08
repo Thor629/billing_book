@@ -1,5 +1,38 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
+import '../../models/party_model.dart';
+import '../../models/item_model.dart';
+import '../../models/bank_account_model.dart';
+import '../../services/party_service.dart';
+import '../../services/item_service.dart';
+import '../../services/bank_account_service.dart';
+import '../../services/quotation_service.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/organization_provider.dart';
+
+class QuotationItem {
+  final ItemModel item;
+  double quantity;
+  double pricePerUnit;
+  double discountPercent;
+  double taxPercent;
+
+  QuotationItem({
+    required this.item,
+    this.quantity = 1,
+    double? pricePerUnit,
+    this.discountPercent = 0,
+    double? taxPercent,
+  })  : pricePerUnit = pricePerUnit ?? item.sellingPrice,
+        taxPercent = taxPercent ?? item.gstRate;
+
+  double get subtotal => quantity * pricePerUnit;
+  double get discountAmount => subtotal * (discountPercent / 100);
+  double get taxableAmount => subtotal - discountAmount;
+  double get taxAmount => taxableAmount * (taxPercent / 100);
+  double get lineTotal => taxableAmount + taxAmount;
+}
 
 class CreateQuotationScreen extends StatefulWidget {
   const CreateQuotationScreen({super.key});
@@ -18,6 +51,347 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
   DateTime _validityDate = DateTime.now().add(const Duration(days: 30));
   bool _showBankDetails = true;
   bool _autoRoundOff = false;
+
+  // Party and Items
+  PartyModel? _selectedParty;
+  List<QuotationItem> _quotationItems = [];
+
+  // Bank Accounts
+  BankAccount? _selectedBankAccount;
+  List<BankAccount> _bankAccounts = [];
+
+  // Discount and Charges
+  double _discountAmount = 0;
+  double _additionalCharges = 0;
+
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBankAccounts();
+    _loadNextQuotationNumber();
+  }
+
+  Future<void> _loadNextQuotationNumber() async {
+    try {
+      final quotationService = QuotationService();
+      final result = await quotationService.getNextQuotationNumber();
+      setState(() {
+        _quotationNumberController.text = result['next_number'].toString();
+      });
+    } catch (e) {
+      // If error, keep default value
+      debugPrint('Error loading next quotation number: $e');
+    }
+  }
+
+  Future<void> _loadBankAccounts() async {
+    setState(() => _isLoading = true);
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final orgProvider =
+          Provider.of<OrganizationProvider>(context, listen: false);
+
+      if (orgProvider.selectedOrganization == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      final token = await authProvider.token;
+      if (token == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      final bankAccountService = BankAccountService();
+      final accounts = await bankAccountService.getBankAccounts(
+        token,
+        orgProvider.selectedOrganization!.id,
+      );
+
+      setState(() {
+        _bankAccounts = accounts;
+        if (accounts.isNotEmpty) {
+          _selectedBankAccount = accounts.first;
+        }
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading bank accounts: $e')),
+        );
+      }
+    }
+  }
+
+  double get _subtotal =>
+      _quotationItems.fold(0.0, (sum, item) => sum + item.subtotal);
+
+  double get _totalDiscount =>
+      _quotationItems.fold(0.0, (sum, item) => sum + item.discountAmount) +
+      _discountAmount;
+
+  double get _totalTax =>
+      _quotationItems.fold(0.0, (sum, item) => sum + item.taxAmount);
+
+  double get _totalAmount =>
+      _subtotal - _discountAmount + _totalTax + _additionalCharges;
+
+  Future<void> _showPartySelectionDialog() async {
+    final orgProvider =
+        Provider.of<OrganizationProvider>(context, listen: false);
+
+    if (orgProvider.selectedOrganization == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select an organization first')),
+      );
+      return;
+    }
+
+    final partyService = PartyService();
+
+    try {
+      final parties = await partyService.getParties(
+        orgProvider.selectedOrganization!.id,
+      );
+
+      if (!mounted) return;
+
+      final selectedParty = await showDialog<PartyModel>(
+        context: context,
+        builder: (context) => _PartySearchDialog(parties: parties),
+      );
+
+      if (selectedParty != null) {
+        setState(() => _selectedParty = selectedParty);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading parties: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _showItemSelectionDialog() async {
+    final orgProvider =
+        Provider.of<OrganizationProvider>(context, listen: false);
+
+    if (orgProvider.selectedOrganization == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select an organization first')),
+      );
+      return;
+    }
+
+    final itemService = ItemService();
+
+    try {
+      final items = await itemService.getItems(
+        orgProvider.selectedOrganization!.id,
+      );
+
+      if (!mounted) return;
+
+      final selectedItem = await showDialog<ItemModel>(
+        context: context,
+        builder: (context) => _ItemSearchDialog(items: items),
+      );
+
+      if (selectedItem != null) {
+        setState(() {
+          _quotationItems.add(QuotationItem(item: selectedItem));
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading items: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _showDiscountDialog() async {
+    final controller = TextEditingController(text: _discountAmount.toString());
+
+    final result = await showDialog<double>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Discount'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'Discount Amount',
+            prefixText: '₹ ',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final amount = double.tryParse(controller.text) ?? 0;
+              Navigator.pop(context, amount);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryDark,
+            ),
+            child: const Text('Apply'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null) {
+      setState(() => _discountAmount = result);
+    }
+  }
+
+  Future<void> _showAdditionalChargesDialog() async {
+    final controller =
+        TextEditingController(text: _additionalCharges.toString());
+
+    final result = await showDialog<double>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Additional Charges'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'Additional Charges',
+            prefixText: '₹ ',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final amount = double.tryParse(controller.text) ?? 0;
+              Navigator.pop(context, amount);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryDark,
+            ),
+            child: const Text('Apply'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null) {
+      setState(() => _additionalCharges = result);
+    }
+  }
+
+  Future<void> _saveQuotation({bool saveAndNew = false}) async {
+    // Validation
+    if (_selectedParty == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a party')),
+      );
+      return;
+    }
+
+    if (_quotationItems.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please add at least one item')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final orgProvider =
+          Provider.of<OrganizationProvider>(context, listen: false);
+
+      if (orgProvider.selectedOrganization == null) {
+        throw Exception('No organization selected');
+      }
+
+      final quotationData = {
+        'organization_id': orgProvider.selectedOrganization!.id,
+        'party_id': _selectedParty!.id,
+        'quotation_number': _quotationNumberController.text,
+        'quotation_date': _quotationDate.toIso8601String(),
+        'validity_date': _validityDate.toIso8601String(),
+        'subtotal': _subtotal,
+        'discount_amount': _discountAmount,
+        'tax_amount': _totalTax,
+        'additional_charges': _additionalCharges,
+        'total_amount': _totalAmount,
+        'bank_account_id': _selectedBankAccount?.id,
+        'items': _quotationItems.map((item) {
+          return {
+            'item_id': item.item.id,
+            'quantity': item.quantity,
+            'price_per_unit': item.pricePerUnit,
+            'discount_percent': item.discountPercent,
+            'tax_percent': item.taxPercent,
+            'subtotal': item.subtotal,
+            'discount_amount': item.discountAmount,
+            'taxable_amount': item.taxableAmount,
+            'tax_amount': item.taxAmount,
+            'line_total': item.lineTotal,
+          };
+        }).toList(),
+      };
+
+      final quotationService = QuotationService();
+      await quotationService.createQuotation(quotationData);
+
+      setState(() => _isLoading = false);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Quotation saved successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        if (saveAndNew) {
+          // Reset form
+          setState(() {
+            _selectedParty = null;
+            _quotationItems.clear();
+            _discountAmount = 0;
+            _additionalCharges = 0;
+            _quotationDate = DateTime.now();
+            _validityDate = DateTime.now().add(const Duration(days: 30));
+            _validForController.text = '30';
+          });
+          _loadNextQuotationNumber();
+        } else {
+          Navigator.pop(context, true);
+        }
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving quotation: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -44,17 +418,27 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
             onPressed: () {},
           ),
           TextButton(
-            onPressed: () {},
+            onPressed:
+                _isLoading ? null : () => _saveQuotation(saveAndNew: true),
             child: const Text('Save & New'),
           ),
           const SizedBox(width: 8),
           ElevatedButton(
-            onPressed: () {},
+            onPressed: _isLoading ? null : _saveQuotation,
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primaryDark,
               foregroundColor: Colors.white,
             ),
-            child: const Text('Save'),
+            child: _isLoading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : const Text('Save'),
           ),
           const SizedBox(width: 16),
         ],
@@ -119,37 +503,74 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Bill To',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey,
-              fontWeight: FontWeight.w500,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Bill To',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              if (_selectedParty != null)
+                TextButton(
+                  onPressed: _showPartySelectionDialog,
+                  child: const Text('Change Party'),
+                ),
+            ],
           ),
           const SizedBox(height: 16),
-          InkWell(
-            onTap: () {
-              // Show party selection dialog
-            },
-            child: Container(
-              padding: const EdgeInsets.all(40),
-              decoration: BoxDecoration(
-                border:
-                    Border.all(color: Colors.blue, style: BorderStyle.solid),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Center(
-                child: Text(
-                  '+ Add Party',
-                  style: TextStyle(
-                    color: Colors.blue,
-                    fontSize: 16,
+          if (_selectedParty == null)
+            InkWell(
+              onTap: _showPartySelectionDialog,
+              child: Container(
+                padding: const EdgeInsets.all(40),
+                decoration: BoxDecoration(
+                  border:
+                      Border.all(color: Colors.blue, style: BorderStyle.solid),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Center(
+                  child: Text(
+                    '+ Add Party',
+                    style: TextStyle(
+                      color: Colors.blue,
+                      fontSize: 16,
+                    ),
                   ),
                 ),
               ),
+            )
+          else
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _selectedParty!.name,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text('Phone: ${_selectedParty!.phone}'),
+                  if (_selectedParty!.email != null)
+                    Text('Email: ${_selectedParty!.email}'),
+                  if (_selectedParty!.billingAddress != null)
+                    Text('Address: ${_selectedParty!.billingAddress}'),
+                  if (_selectedParty!.gstNo != null)
+                    Text('GST: ${_selectedParty!.gstNo}'),
+                ],
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -189,11 +610,115 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
               ],
             ),
           ),
+          // Item Rows
+          ..._quotationItems.asMap().entries.map((entry) {
+            final index = entry.key;
+            final quotationItem = entry.value;
+            return Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: Colors.grey[300]!),
+                ),
+              ),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 40,
+                    child: Text('${index + 1}'),
+                  ),
+                  Expanded(
+                    flex: 3,
+                    child: Text(quotationItem.item.itemName),
+                  ),
+                  Expanded(
+                    child: Text(quotationItem.item.hsnCode ?? '-'),
+                  ),
+                  Expanded(
+                    child: Text(quotationItem.item.itemCode),
+                  ),
+                  Expanded(
+                    child: Text('₹${quotationItem.item.sellingPrice}'),
+                  ),
+                  Expanded(
+                    child: TextField(
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.number,
+                      controller: TextEditingController(
+                        text: quotationItem.quantity.toString(),
+                      ),
+                      onChanged: (value) {
+                        setState(() {
+                          quotationItem.quantity = double.tryParse(value) ?? 1;
+                        });
+                      },
+                    ),
+                  ),
+                  Expanded(
+                    child: TextField(
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.number,
+                      controller: TextEditingController(
+                        text: quotationItem.pricePerUnit.toString(),
+                      ),
+                      onChanged: (value) {
+                        setState(() {
+                          quotationItem.pricePerUnit =
+                              double.tryParse(value) ?? 0;
+                        });
+                      },
+                    ),
+                  ),
+                  Expanded(
+                    child: TextField(
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        border: OutlineInputBorder(),
+                        suffixText: '%',
+                      ),
+                      keyboardType: TextInputType.number,
+                      controller: TextEditingController(
+                        text: quotationItem.discountPercent.toString(),
+                      ),
+                      onChanged: (value) {
+                        setState(() {
+                          quotationItem.discountPercent =
+                              double.tryParse(value) ?? 0;
+                        });
+                      },
+                    ),
+                  ),
+                  Expanded(
+                    child: Text('${quotationItem.taxPercent}%'),
+                  ),
+                  Expanded(
+                    child:
+                        Text('₹${quotationItem.lineTotal.toStringAsFixed(2)}'),
+                  ),
+                  SizedBox(
+                    width: 40,
+                    child: IconButton(
+                      icon: const Icon(Icons.delete, size: 18),
+                      onPressed: () {
+                        setState(() {
+                          _quotationItems.removeAt(index);
+                        });
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
           // Add Item Row
           InkWell(
-            onTap: () {
-              // Show add item dialog
-            },
+            onTap: _showItemSelectionDialog,
             child: Container(
               padding: const EdgeInsets.all(40),
               child: const Center(
@@ -213,17 +738,17 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
             decoration: BoxDecoration(
               color: Colors.grey[50],
             ),
-            child: const Row(
+            child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                Text('SUBTOTAL'),
-                SizedBox(width: 100),
-                Text('₹0'),
-                SizedBox(width: 50),
-                Text('₹0'),
-                SizedBox(width: 50),
-                Text('₹0'),
-                SizedBox(width: 40),
+                const Text('SUBTOTAL'),
+                const SizedBox(width: 100),
+                Text('₹${_subtotal.toStringAsFixed(2)}'),
+                const SizedBox(width: 50),
+                Text('₹${_totalTax.toStringAsFixed(2)}'),
+                const SizedBox(width: 50),
+                Text('₹${(_subtotal + _totalTax).toStringAsFixed(2)}'),
+                const SizedBox(width: 40),
               ],
             ),
           ),
@@ -281,6 +806,8 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
   }
 
   Widget _buildBankDetails() {
+    if (_selectedBankAccount == null) return const SizedBox.shrink();
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -298,19 +825,36 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          _buildDetailRow('Account Number:', '954000210000656'),
-          _buildDetailRow('IFSC Code:', 'PUNB0954000'),
           _buildDetailRow(
-              'Bank & Branch Name:', 'Punjab National Bank ,PANDESARA'),
-          _buildDetailRow('Account Holder\'s Name:', 'SHIVOHAM INTERPRICE'),
-          _buildDetailRow('UPI ID:', 'thecompletesoRech-3@okhdfc bank'),
+              'Bank Name:', _selectedBankAccount!.bankName ?? 'N/A'),
+          _buildDetailRow(
+              'Account Number:', _selectedBankAccount!.bankAccountNo ?? 'N/A'),
+          _buildDetailRow(
+              'IFSC Code:', _selectedBankAccount!.ifscCode ?? 'N/A'),
+          _buildDetailRow('Account Holder:',
+              _selectedBankAccount!.accountHolderName ?? 'N/A'),
+          if (_selectedBankAccount!.branchName != null)
+            _buildDetailRow('Branch:', _selectedBankAccount!.branchName!),
           const SizedBox(height: 12),
           Row(
             children: [
-              TextButton(
-                onPressed: () {},
-                child: const Text('Change Bank Account'),
-              ),
+              if (_bankAccounts.length > 1)
+                PopupMenuButton<BankAccount>(
+                  child: TextButton(
+                    onPressed: null,
+                    child: const Text('Change Bank Account'),
+                  ),
+                  itemBuilder: (context) => _bankAccounts
+                      .map((account) => PopupMenuItem<BankAccount>(
+                            value: account,
+                            child: Text(
+                                '${account.bankName ?? 'N/A'} - ${account.bankAccountNo ?? 'N/A'}'),
+                          ))
+                      .toList(),
+                  onSelected: (account) {
+                    setState(() => _selectedBankAccount = account);
+                  },
+                ),
               const Spacer(),
               TextButton(
                 onPressed: () {
@@ -493,22 +1037,34 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
               ],
             ),
             const Divider(height: 32),
-            _buildTotalRow('SUBTOTAL', '₹0'),
-            _buildTotalRow('', '₹0'),
-            _buildTotalRow('', '₹0'),
+            _buildTotalRow('SUBTOTAL', '₹${_subtotal.toStringAsFixed(2)}'),
+            if (_totalDiscount > 0)
+              _buildTotalRow(
+                  'Discount', '-₹${_totalDiscount.toStringAsFixed(2)}',
+                  color: Colors.red),
+            if (_additionalCharges > 0)
+              _buildTotalRow('Additional Charges',
+                  '₹${_additionalCharges.toStringAsFixed(2)}',
+                  color: Colors.green),
+            _buildTotalRow('Tax', '₹${_totalTax.toStringAsFixed(2)}'),
             const Divider(height: 24),
             TextButton.icon(
-              onPressed: () {},
+              onPressed: _showDiscountDialog,
               icon: const Icon(Icons.add, size: 18),
-              label: const Text('Add Discount'),
+              label: Text(_discountAmount > 0
+                  ? 'Discount: ₹${_discountAmount.toStringAsFixed(2)}'
+                  : 'Add Discount'),
             ),
             TextButton.icon(
-              onPressed: () {},
+              onPressed: _showAdditionalChargesDialog,
               icon: const Icon(Icons.add, size: 18),
-              label: const Text('Add Additional Charges'),
+              label: Text(_additionalCharges > 0
+                  ? 'Charges: ₹${_additionalCharges.toStringAsFixed(2)}'
+                  : 'Add Additional Charges'),
             ),
             const Divider(height: 24),
-            _buildTotalRow('Taxable Amount', '₹0'),
+            _buildTotalRow('Taxable Amount',
+                '₹${(_subtotal - _discountAmount).toStringAsFixed(2)}'),
             Row(
               children: [
                 Checkbox(
@@ -534,7 +1090,7 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
             const Divider(height: 24),
             _buildTotalRow(
               'Total Amount',
-              '₹0',
+              '₹${_totalAmount.toStringAsFixed(2)}',
               isBold: true,
             ),
             const SizedBox(height: 16),
@@ -625,5 +1181,253 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
     _quotationNumberController.dispose();
     _validForController.dispose();
     super.dispose();
+  }
+}
+
+// Searchable Party Selection Dialog
+class _PartySearchDialog extends StatefulWidget {
+  final List<PartyModel> parties;
+
+  const _PartySearchDialog({required this.parties});
+
+  @override
+  State<_PartySearchDialog> createState() => _PartySearchDialogState();
+}
+
+class _PartySearchDialogState extends State<_PartySearchDialog> {
+  final TextEditingController _searchController = TextEditingController();
+  List<PartyModel> _filteredParties = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _filteredParties = widget.parties;
+    _searchController.addListener(_filterParties);
+  }
+
+  void _filterParties() {
+    final query = _searchController.text.toLowerCase();
+    setState(() {
+      _filteredParties = widget.parties.where((party) {
+        return party.name.toLowerCase().contains(query) ||
+            party.phone.toLowerCase().contains(query) ||
+            (party.email?.toLowerCase().contains(query) ?? false);
+      }).toList();
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Select Party'),
+      content: SizedBox(
+        width: 500,
+        height: 500,
+        child: Column(
+          children: [
+            TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Search by name, phone, or email...',
+                prefixIcon: const Icon(Icons.search),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                filled: true,
+                fillColor: Colors.grey[100],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: _filteredParties.isEmpty
+                  ? Center(
+                      child: Text(
+                        _searchController.text.isEmpty
+                            ? 'No parties found'
+                            : 'No parties match your search',
+                        style: const TextStyle(color: Colors.grey),
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: _filteredParties.length,
+                      itemBuilder: (context, index) {
+                        final party = _filteredParties[index];
+                        return ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor:
+                                AppColors.primaryDark.withOpacity(0.1),
+                            child: Text(
+                              party.name[0].toUpperCase(),
+                              style: TextStyle(color: AppColors.primaryDark),
+                            ),
+                          ),
+                          title: Text(
+                            party.name,
+                            style: const TextStyle(fontWeight: FontWeight.w500),
+                          ),
+                          subtitle: Text(party.phone),
+                          trailing: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              party.partyTypeLabel,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Colors.blue,
+                              ),
+                            ),
+                          ),
+                          onTap: () => Navigator.pop(context, party),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+      ],
+    );
+  }
+}
+
+// Searchable Item Selection Dialog
+class _ItemSearchDialog extends StatefulWidget {
+  final List<ItemModel> items;
+
+  const _ItemSearchDialog({required this.items});
+
+  @override
+  State<_ItemSearchDialog> createState() => _ItemSearchDialogState();
+}
+
+class _ItemSearchDialogState extends State<_ItemSearchDialog> {
+  final TextEditingController _searchController = TextEditingController();
+  List<ItemModel> _filteredItems = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _filteredItems = widget.items;
+    _searchController.addListener(_filterItems);
+  }
+
+  void _filterItems() {
+    final query = _searchController.text.toLowerCase();
+    setState(() {
+      _filteredItems = widget.items.where((item) {
+        return item.itemName.toLowerCase().contains(query) ||
+            item.itemCode.toLowerCase().contains(query) ||
+            (item.hsnCode?.toLowerCase().contains(query) ?? false);
+      }).toList();
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Select Item'),
+      content: SizedBox(
+        width: 600,
+        height: 500,
+        child: Column(
+          children: [
+            TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Search by name, code, or HSN...',
+                prefixIcon: const Icon(Icons.search),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                filled: true,
+                fillColor: Colors.grey[100],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: _filteredItems.isEmpty
+                  ? Center(
+                      child: Text(
+                        _searchController.text.isEmpty
+                            ? 'No items found'
+                            : 'No items match your search',
+                        style: const TextStyle(color: Colors.grey),
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: _filteredItems.length,
+                      itemBuilder: (context, index) {
+                        final item = _filteredItems[index];
+                        return ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: Colors.green.withOpacity(0.1),
+                            child: const Icon(Icons.inventory_2,
+                                color: Colors.green),
+                          ),
+                          title: Text(
+                            item.itemName,
+                            style: const TextStyle(fontWeight: FontWeight.w500),
+                          ),
+                          subtitle: Text(
+                            'Code: ${item.itemCode} | Price: ₹${item.sellingPrice}',
+                          ),
+                          trailing: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                'Stock: ${item.stockQty}',
+                                style: TextStyle(
+                                  color: item.stockQty > 0
+                                      ? Colors.green
+                                      : Colors.red,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              if (item.hsnCode != null)
+                                Text(
+                                  'HSN: ${item.hsnCode}',
+                                  style: const TextStyle(fontSize: 10),
+                                ),
+                            ],
+                          ),
+                          onTap: () => Navigator.pop(context, item),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+      ],
+    );
   }
 }

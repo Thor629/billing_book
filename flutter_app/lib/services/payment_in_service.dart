@@ -124,4 +124,20 @@ class PaymentInService {
       throw Exception('Error fetching next payment number: $e');
     }
   }
+
+  Future<List<dynamic>> getBankAccounts(int organizationId) async {
+    try {
+      final response = await _apiClient
+          .get('/bank-accounts?organization_id=$organizationId');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return data['accounts'] as List;
+      } else {
+        throw Exception('Failed to load bank accounts');
+      }
+    } catch (e) {
+      throw Exception('Error fetching bank accounts: $e');
+    }
+  }
 }

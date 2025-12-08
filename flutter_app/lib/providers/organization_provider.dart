@@ -16,26 +16,50 @@ class OrganizationProvider with ChangeNotifier {
   String? get error => _error;
   bool get hasOrganization => _selectedOrganization != null;
 
-  // Load user's organizations
+  // Load user's organizations and restore previously selected one
   Future<void> loadOrganizations() async {
+    if (_isLoading) return; // Prevent duplicate calls
+
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
+      print('OrganizationProvider: Loading organizations...');
       _organizations = await _organizationService.getOrganizations();
+      print(
+          'OrganizationProvider: Loaded ${_organizations.length} organizations');
+
+      // Try to restore previously selected organization
+      final savedOrgId = await _organizationService.getSelectedOrganizationId();
+      if (savedOrgId != null) {
+        try {
+          final savedOrg = _organizations.firstWhere(
+            (org) => org.id == savedOrgId,
+          );
+          _selectedOrganization = savedOrg;
+          print(
+              'OrganizationProvider: Restored organization: ${savedOrg.name}');
+        } catch (e) {
+          print('OrganizationProvider: Could not restore saved organization');
+        }
+      }
+
       _isLoading = false;
       notifyListeners();
+      print('OrganizationProvider: Loading complete');
     } catch (e) {
+      print('OrganizationProvider: Error loading organizations: $e');
       _error = e.toString().replaceAll('Exception: ', '');
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  // Select an organization
-  void selectOrganization(OrganizationModel organization) {
+  // Select an organization and persist the selection
+  Future<void> selectOrganization(OrganizationModel organization) async {
     _selectedOrganization = organization;
+    await _organizationService.saveSelectedOrganizationId(organization.id);
     notifyListeners();
   }
 
@@ -50,6 +74,7 @@ class OrganizationProvider with ChangeNotifier {
           await _organizationService.createOrganization(orgData);
       _organizations.add(organization);
       _selectedOrganization = organization;
+      await _organizationService.saveSelectedOrganizationId(organization.id);
       _isLoading = false;
       notifyListeners();
       return true;
@@ -62,10 +87,11 @@ class OrganizationProvider with ChangeNotifier {
   }
 
   // Clear organization (on logout)
-  void clearOrganization() {
+  Future<void> clearOrganization() async {
     _organizations = [];
     _selectedOrganization = null;
     _error = null;
+    await _organizationService.clearSelectedOrganization();
     notifyListeners();
   }
 }

@@ -20,8 +20,10 @@ class CashBankScreen extends StatefulWidget {
 class _CashBankScreenState extends State<CashBankScreen> {
   final BankAccountService _bankAccountService = BankAccountService();
   List<BankAccount> _accounts = [];
+  List<BankTransaction> _transactions = [];
   bool _isLoading = true;
-  String _selectedPeriod = 'Last 30 Days';
+  bool _isLoadingTransactions = false;
+  String _selectedPeriod = 'All Time';
 
   @override
   void initState() {
@@ -48,11 +50,85 @@ class _CashBankScreenState extends State<CashBankScreen> {
         _accounts = accounts;
         _isLoading = false;
       });
+
+      // Load transactions after accounts are loaded
+      await _loadTransactions();
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error loading accounts: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _loadTransactions() async {
+    setState(() => _isLoadingTransactions = true);
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final orgProvider =
+          Provider.of<OrganizationProvider>(context, listen: false);
+
+      if (orgProvider.selectedOrganization == null) {
+        setState(() => _isLoadingTransactions = false);
+        return;
+      }
+
+      final token = await authProvider.token;
+      if (token == null) throw Exception('Not authenticated');
+
+      // Calculate date range based on selected period
+      final now = DateTime.now();
+      String? startDate;
+      String? endDate;
+
+      switch (_selectedPeriod) {
+        case 'Last 30 Days':
+          startDate = DateFormat('yyyy-MM-dd')
+              .format(now.subtract(const Duration(days: 30)));
+          endDate = DateFormat('yyyy-MM-dd').format(now);
+          break;
+        case 'Last 90 Days':
+          startDate = DateFormat('yyyy-MM-dd')
+              .format(now.subtract(const Duration(days: 90)));
+          endDate = DateFormat('yyyy-MM-dd').format(now);
+          break;
+        case 'This Year':
+          startDate = DateFormat('yyyy-MM-dd').format(DateTime(now.year, 1, 1));
+          endDate = DateFormat('yyyy-MM-dd').format(now);
+          break;
+        case 'All Time':
+          // No date filter - show all transactions
+          startDate = null;
+          endDate = null;
+          break;
+      }
+
+      final transactions = await _bankAccountService.getTransactions(
+        token,
+        organizationId: orgProvider.selectedOrganization!.id,
+        startDate: startDate,
+        endDate: endDate,
+      );
+
+      print('DEBUG: Loaded ${transactions.length} transactions');
+      print('DEBUG: Organization ID: ${orgProvider.selectedOrganization!.id}');
+      print('DEBUG: Date range: $startDate to $endDate');
+
+      setState(() {
+        _transactions = transactions;
+        _isLoadingTransactions = false;
+      });
+    } catch (e) {
+      print('DEBUG ERROR: Failed to load transactions: $e');
+      setState(() => _isLoadingTransactions = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading transactions: $e'),
+            duration: const Duration(seconds: 5),
+          ),
         );
       }
     }
@@ -341,17 +417,15 @@ class _CashBankScreenState extends State<CashBankScreen> {
                             ),
                             child: Row(
                               children: [
-                                TextButton(
-                                  onPressed: () {},
-                                  child: const Text('Transactions'),
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: AppColors.primaryDark,
-                                  ),
+                                Text(
+                                  'All Transactions',
+                                  style: AppTextStyles.h3,
                                 ),
                                 const Spacer(),
                                 DropdownButton<String>(
                                   value: _selectedPeriod,
                                   items: [
+                                    'All Time',
                                     'Last 30 Days',
                                     'Last 90 Days',
                                     'This Year'
@@ -363,45 +437,129 @@ class _CashBankScreenState extends State<CashBankScreen> {
                                       .toList(),
                                   onChanged: (value) {
                                     setState(() => _selectedPeriod = value!);
+                                    _loadTransactions();
                                   },
                                 ),
                                 const SizedBox(width: 16),
                                 IconButton(
                                   onPressed: () {},
                                   icon: const Icon(Icons.download),
+                                  tooltip: 'Export',
                                 ),
                               ],
                             ),
                           ),
 
-                          // No Transactions Placeholder
-                          Expanded(
-                            child: Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.receipt_long_outlined,
-                                    size: 64,
-                                    color: Colors.grey.shade400,
-                                  ),
-                                  const SizedBox(height: 16),
-                                  Text(
-                                    'No Transactions',
-                                    style: AppTextStyles.h3.copyWith(
-                                      color: AppColors.textSecondary,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'Your don\'t have any transaction in selected period',
-                                    style: AppTextStyles.bodyMedium.copyWith(
-                                      color: AppColors.textSecondary,
-                                    ),
-                                  ),
-                                ],
+                          // Table Header
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade50,
+                              border: Border(
+                                bottom: BorderSide(color: Colors.grey.shade300),
                               ),
                             ),
+                            child: Row(
+                              children: [
+                                const SizedBox(width: 52), // Icon space
+                                Expanded(
+                                  flex: 3,
+                                  child: Text(
+                                    'Description',
+                                    style: AppTextStyles.bodySmall.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ),
+                                Expanded(
+                                  flex: 2,
+                                  child: Text(
+                                    'Account',
+                                    style: AppTextStyles.bodySmall.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ),
+                                Expanded(
+                                  flex: 1,
+                                  child: Text(
+                                    'Type',
+                                    style: AppTextStyles.bodySmall.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ),
+                                Expanded(
+                                  flex: 1,
+                                  child: Text(
+                                    'Date',
+                                    style: AppTextStyles.bodySmall.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 120,
+                                  child: Text(
+                                    'Amount',
+                                    style: AppTextStyles.bodySmall.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                    textAlign: TextAlign.right,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          // Transactions List
+                          Expanded(
+                            child: _isLoadingTransactions
+                                ? const Center(child: LoadingIndicator())
+                                : _transactions.isEmpty
+                                    ? Center(
+                                        child: Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            Icon(
+                                              Icons.receipt_long_outlined,
+                                              size: 64,
+                                              color: Colors.grey.shade400,
+                                            ),
+                                            const SizedBox(height: 16),
+                                            Text(
+                                              'No Transactions',
+                                              style: AppTextStyles.h3.copyWith(
+                                                color: AppColors.textSecondary,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Text(
+                                              'You don\'t have any transaction in selected period',
+                                              style: AppTextStyles.bodyMedium
+                                                  .copyWith(
+                                                color: AppColors.textSecondary,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      )
+                                    : ListView.builder(
+                                        itemCount: _transactions.length,
+                                        itemBuilder: (context, index) {
+                                          final transaction =
+                                              _transactions[index];
+                                          return _buildTransactionRow(
+                                              transaction);
+                                        },
+                                      ),
                           ),
                         ],
                       ),
@@ -410,6 +568,176 @@ class _CashBankScreenState extends State<CashBankScreen> {
                 ],
               ),
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTransactionRow(BankTransaction transaction) {
+    // Determine icon, color, and type label based on transaction type
+    IconData icon;
+    Color amountColor;
+    String amountPrefix;
+    String typeLabel;
+
+    switch (transaction.transactionType) {
+      case 'add':
+        icon = Icons.add_circle;
+        amountColor = Colors.green;
+        amountPrefix = '+';
+        typeLabel = 'Add Money';
+        break;
+      case 'reduce':
+        icon = Icons.remove_circle;
+        amountColor = Colors.red;
+        amountPrefix = '-';
+        typeLabel = 'Reduce Money';
+        break;
+      case 'expense':
+        icon = Icons.shopping_cart;
+        amountColor = Colors.orange;
+        amountPrefix = '-';
+        typeLabel = 'Expense';
+        break;
+      case 'payment_in':
+        icon = Icons.payment;
+        amountColor = Colors.green;
+        amountPrefix = '+';
+        typeLabel = 'Payment In';
+        break;
+      case 'payment_out':
+        icon = Icons.payment;
+        amountColor = Colors.red;
+        amountPrefix = '-';
+        typeLabel = 'Payment Out';
+        break;
+      case 'transfer_in':
+        icon = Icons.arrow_downward;
+        amountColor = Colors.green;
+        amountPrefix = '+';
+        typeLabel = 'Transfer In';
+        break;
+      case 'transfer_out':
+        icon = Icons.arrow_upward;
+        amountColor = Colors.red;
+        amountPrefix = '-';
+        typeLabel = 'Transfer Out';
+        break;
+      default:
+        icon = Icons.swap_horiz;
+        amountColor = Colors.grey;
+        amountPrefix = '';
+        typeLabel = 'Transaction';
+    }
+
+    // Format date
+    final date = DateTime.parse(transaction.transactionDate);
+    final formattedDate = DateFormat('dd MMM yyyy').format(date);
+
+    // Get account name
+    final account = _accounts.firstWhere(
+      (acc) => acc.id == transaction.accountId,
+      orElse: () => BankAccount(
+        userId: transaction.userId,
+        accountName: 'Unknown Account',
+        openingBalance: 0,
+        asOfDate: '',
+        currentBalance: 0,
+        accountType: 'cash',
+      ),
+    );
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: Colors.grey.shade200),
+        ),
+      ),
+      child: Row(
+        children: [
+          // Icon
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: amountColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: amountColor, size: 20),
+          ),
+          const SizedBox(width: 12),
+
+          // Description
+          Expanded(
+            flex: 3,
+            child: Text(
+              transaction.description ?? typeLabel,
+              style: AppTextStyles.bodyMedium.copyWith(
+                fontWeight: FontWeight.w500,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+
+          // Account Name
+          Expanded(
+            flex: 2,
+            child: Text(
+              account.accountName,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+
+          // Type Badge
+          Expanded(
+            flex: 1,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: amountColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                typeLabel,
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: amountColor,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 11,
+                ),
+                textAlign: TextAlign.center,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+
+          // Date
+          Expanded(
+            flex: 1,
+            child: Text(
+              formattedDate,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+
+          // Amount
+          SizedBox(
+            width: 120,
+            child: Text(
+              '$amountPrefix₹${NumberFormat('#,##,###.##').format(transaction.amount)}',
+              style: AppTextStyles.bodyMedium.copyWith(
+                fontWeight: FontWeight.bold,
+                color: amountColor,
+              ),
+              textAlign: TextAlign.right,
+            ),
+          ),
         ],
       ),
     );
@@ -856,15 +1184,28 @@ class _AddReduceMoneyDialogState extends State<_AddReduceMoneyDialog> {
   final _dateController = TextEditingController();
   BankAccount? _selectedAccount;
   String _transactionType = 'add';
+  String _accountTypeFilter = 'cash'; // 'cash' or 'bank'
   bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
     _dateController.text = DateFormat('yyyy-MM-dd').format(DateTime.now());
-    if (widget.accounts.isNotEmpty) {
+    // Set first cash account as default
+    final cashAccounts =
+        widget.accounts.where((a) => a.accountType == 'cash').toList();
+    if (cashAccounts.isNotEmpty) {
+      _selectedAccount = cashAccounts.first;
+    } else if (widget.accounts.isNotEmpty) {
       _selectedAccount = widget.accounts.first;
+      _accountTypeFilter = widget.accounts.first.accountType;
     }
+  }
+
+  List<BankAccount> get _filteredAccounts {
+    return widget.accounts
+        .where((account) => account.accountType == _accountTypeFilter)
+        .toList();
   }
 
   @override
@@ -970,21 +1311,91 @@ class _AddReduceMoneyDialogState extends State<_AddReduceMoneyDialog> {
                 },
               ),
               const SizedBox(height: 16),
-              DropdownButtonFormField<BankAccount>(
-                value: _selectedAccount,
-                decoration: const InputDecoration(
-                  labelText: 'Select Account *',
-                  border: OutlineInputBorder(),
+
+              // Cash or Bank Selection
+              DropdownButtonFormField<String>(
+                value: _accountTypeFilter,
+                decoration: InputDecoration(
+                  labelText: 'Account Type *',
+                  border: const OutlineInputBorder(),
+                  prefixIcon: Icon(
+                    _accountTypeFilter == 'cash'
+                        ? Icons.account_balance_wallet
+                        : Icons.account_balance,
+                    color: AppColors.primaryDark,
+                  ),
                 ),
-                items: widget.accounts
-                    .map((account) => DropdownMenuItem(
-                          value: account,
-                          child: Text(account.accountName),
-                        ))
-                    .toList(),
+                items: const [
+                  DropdownMenuItem(
+                    value: 'cash',
+                    child: Row(
+                      children: [
+                        Icon(Icons.account_balance_wallet, size: 20),
+                        SizedBox(width: 8),
+                        Text('Cash'),
+                      ],
+                    ),
+                  ),
+                  DropdownMenuItem(
+                    value: 'bank',
+                    child: Row(
+                      children: [
+                        Icon(Icons.account_balance, size: 20),
+                        SizedBox(width: 8),
+                        Text('Bank'),
+                      ],
+                    ),
+                  ),
+                ],
                 onChanged: (value) {
-                  setState(() => _selectedAccount = value);
+                  setState(() {
+                    _accountTypeFilter = value!;
+                    // Reset selected account when type changes
+                    final filtered = _filteredAccounts;
+                    _selectedAccount =
+                        filtered.isNotEmpty ? filtered.first : null;
+                  });
                 },
+              ),
+              const SizedBox(height: 16),
+
+              // Account Selection (filtered by type)
+              DropdownButtonFormField<BankAccount>(
+                value: _filteredAccounts.contains(_selectedAccount)
+                    ? _selectedAccount
+                    : (_filteredAccounts.isNotEmpty
+                        ? _filteredAccounts.first
+                        : null),
+                decoration: InputDecoration(
+                  labelText: _accountTypeFilter == 'cash'
+                      ? 'Select Cash Account *'
+                      : 'Select Bank Account *',
+                  border: const OutlineInputBorder(),
+                  helperText: _filteredAccounts.isEmpty
+                      ? 'No ${_accountTypeFilter} accounts available'
+                      : null,
+                ),
+                items: _filteredAccounts.isEmpty
+                    ? [
+                        const DropdownMenuItem(
+                          value: null,
+                          child: Text('No accounts available'),
+                        )
+                      ]
+                    : _filteredAccounts
+                        .map((account) => DropdownMenuItem(
+                              value: account,
+                              child: Text(
+                                '${account.accountName} - ₹${NumberFormat('#,##,###.##').format(account.currentBalance)}',
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ))
+                        .toList(),
+                onChanged: _filteredAccounts.isEmpty
+                    ? null
+                    : (value) {
+                        setState(() => _selectedAccount = value);
+                      },
                 validator: (value) => value == null ? 'Required' : null,
               ),
               const SizedBox(height: 16),

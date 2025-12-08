@@ -1,9 +1,11 @@
-import '../core/constants/app_config.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/organization_model.dart';
 import 'api_client.dart';
 
 class OrganizationService {
   final ApiClient _apiClient = ApiClient();
+  final _storage = const FlutterSecureStorage();
+  static const String _selectedOrgKey = 'selected_organization_id';
 
   Future<List<OrganizationModel>> getOrganizations() async {
     final response = await _apiClient.get('/organizations');
@@ -36,5 +38,24 @@ class OrganizationService {
   Future<void> deleteOrganization(int id) async {
     final response = await _apiClient.delete('/organizations/$id');
     _apiClient.handleResponse(response);
+  }
+
+  // Save selected organization ID
+  Future<void> saveSelectedOrganizationId(int orgId) async {
+    await _storage.write(key: _selectedOrgKey, value: orgId.toString());
+  }
+
+  // Get selected organization ID
+  Future<int?> getSelectedOrganizationId() async {
+    final orgIdStr = await _storage.read(key: _selectedOrgKey);
+    if (orgIdStr != null) {
+      return int.tryParse(orgIdStr);
+    }
+    return null;
+  }
+
+  // Clear selected organization
+  Future<void> clearSelectedOrganization() async {
+    await _storage.delete(key: _selectedOrgKey);
   }
 }

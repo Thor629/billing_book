@@ -38,12 +38,14 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     });
 
     try {
+      print('DEBUG: Loading users...');
       final data = await _userService.getUsers(
         page: _currentPage,
         search: _searchController.text,
         status: _statusFilter,
       );
 
+      print('DEBUG: Users loaded successfully: ${data['data'].length} users');
       setState(() {
         _users = (data['data'] as List)
             .map((json) => UserModel.fromJson(json))
@@ -52,6 +54,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         _isLoading = false;
       });
     } catch (e) {
+      print('DEBUG: Error loading users: $e');
       setState(() {
         _error = e.toString().replaceAll('Exception: ', '');
         _isLoading = false;

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_text_styles.dart';
 import '../../models/sales_invoice_model.dart';
 import '../../services/sales_invoice_service.dart';
+import '../../providers/organization_provider.dart';
 import 'create_sales_invoice_screen.dart';
 
 class SalesInvoicesScreen extends StatefulWidget {
@@ -30,9 +32,18 @@ class _SalesInvoicesScreenState extends State<SalesInvoicesScreen> {
   }
 
   Future<void> _loadInvoices() async {
+    final orgProvider =
+        Provider.of<OrganizationProvider>(context, listen: false);
+
+    if (orgProvider.selectedOrganization == null) {
+      setState(() => _isLoading = false);
+      return;
+    }
+
     setState(() => _isLoading = true);
     try {
       final result = await _invoiceService.getInvoices(
+        organizationId: orgProvider.selectedOrganization!.id,
         dateFilter: _selectedFilter,
       );
       setState(() {
@@ -52,6 +63,16 @@ class _SalesInvoicesScreenState extends State<SalesInvoicesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final orgProvider = Provider.of<OrganizationProvider>(context);
+
+    if (orgProvider.selectedOrganization == null) {
+      return const Scaffold(
+        body: Center(
+          child: Text('Please select an organization first'),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Padding(

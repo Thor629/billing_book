@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\PaymentIn;
+use App\Models\BankTransaction;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -84,6 +85,7 @@ class PaymentInController extends Controller
             'payment_mode' => 'required|string|max:50',
             'notes' => 'nullable|string',
             'reference_number' => 'nullable|string|max:100',
+            'bank_account_id' => 'nullable|exists:bank_accounts,id',
         ]);
 
         if ($validator->fails()) {
@@ -129,6 +131,9 @@ class PaymentInController extends Controller
                 'reference_number' => $request->reference_number,
             ]);
 
+            // Update bank account balance and create transaction
+            $this->updateBankAccountBalance($request, $organizationId, $payment);
+
             return response()->json([
                 'message' => 'Payment recorded successfully',
                 'payment' => $payment->load(['party', 'organization']),
@@ -139,6 +144,73 @@ class PaymentInController extends Controller
                 'message' => 'Failed to record payment',
                 'error' => $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * Update bank account balance based on payment mode
+     */
+    private function updateBankAccountBalance(Request $request, $organizationId, $payment)
+    {
+        $amount = $request->amount;
+        $paymentMode = $request->payment_mode;
+        $description = "Payment In: {$payment->payment_number}";
+        
+        if ($request->notes) {
+            $description .= " - {$request->notes}";
+        }
+
+        if ($paymentMode === 'Cash') {
+            // Find or create "Cash in Hand" account
+            $cashAccount = \App\Models\BankAccount::firstOrCreate(
+                [
+                    'organization_id' => $organizationId,
+                    'account_name' => 'Cash in Hand',
+                    'account_type' => 'cash',
+                ],
+                [
+                    'user_id' => $request->user()->id,
+                    'opening_balance' => 0,
+                    'current_balance' => 0,
+                    'as_of_date' => now(),
+                ]
+            );
+
+            // Increase cash balance
+            $cashAccount->increment('current_balance', $amount);
+
+            // Create transaction record
+            BankTransaction::create([
+                'user_id' => $request->user()->id,
+                'organization_id' => $organizationId,
+                'account_id' => $cashAccount->id,
+                'transaction_type' => 'payment_in',
+                'amount' => $amount,
+                'transaction_date' => $request->payment_date,
+                'description' => $description,
+            ]);
+        } else {
+            // For non-cash payments, update the specified bank account
+            if ($request->has('bank_account_id') && $request->bank_account_id) {
+                $bankAccount = \App\Models\BankAccount::where('id', $request->bank_account_id)
+                    ->where('organization_id', $organizationId)
+                    ->first();
+
+                if ($bankAccount) {
+                    $bankAccount->increment('current_balance', $amount);
+
+                    // Create transaction record
+                    BankTransaction::create([
+                        'user_id' => $request->user()->id,
+                        'organization_id' => $organizationId,
+                        'account_id' => $bankAccount->id,
+                        'transaction_type' => 'payment_in',
+                        'amount' => $amount,
+                        'transaction_date' => $request->payment_date,
+                        'description' => $description,
+                    ]);
+                }
+            }
         }
     }
 

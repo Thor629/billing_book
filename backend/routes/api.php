@@ -179,6 +179,35 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/transfer', [App\Http\Controllers\BankTransactionController::class, 'transfer']);
     });
     
+    // Expense routes
+    Route::prefix('expenses')->group(function () {
+        Route::get('/', [App\Http\Controllers\ExpenseController::class, 'index']);
+        Route::post('/', [App\Http\Controllers\ExpenseController::class, 'store']);
+        Route::get('/next-number', [App\Http\Controllers\ExpenseController::class, 'getNextExpenseNumber']);
+        Route::get('/categories', [App\Http\Controllers\ExpenseController::class, 'getCategories']);
+        Route::get('/{id}', [App\Http\Controllers\ExpenseController::class, 'show']);
+        Route::delete('/{id}', [App\Http\Controllers\ExpenseController::class, 'destroy']);
+    });
+    
+    // Delivery Challan routes
+    Route::prefix('delivery-challans')->group(function () {
+        Route::get('/', [App\Http\Controllers\DeliveryChallanController::class, 'index']);
+        Route::post('/', [App\Http\Controllers\DeliveryChallanController::class, 'store']);
+        Route::get('/next-number', [App\Http\Controllers\DeliveryChallanController::class, 'getNextChallanNumber']);
+        Route::get('/{id}', [App\Http\Controllers\DeliveryChallanController::class, 'show']);
+        Route::delete('/{id}', [App\Http\Controllers\DeliveryChallanController::class, 'destroy']);
+    });
+    
+    // Delivery Challan routes
+    Route::prefix('delivery-challans')->group(function () {
+        Route::get('/', [App\Http\Controllers\DeliveryChallanController::class, 'index']);
+        Route::post('/', [App\Http\Controllers\DeliveryChallanController::class, 'store']);
+        Route::get('/next-number', [App\Http\Controllers\DeliveryChallanController::class, 'getNextChallanNumber']);
+        Route::get('/{id}', [App\Http\Controllers\DeliveryChallanController::class, 'show']);
+        Route::patch('/{id}/status', [App\Http\Controllers\DeliveryChallanController::class, 'updateStatus']);
+        Route::delete('/{id}', [App\Http\Controllers\DeliveryChallanController::class, 'destroy']);
+    });
+    
     // User profile routes
     Route::prefix('user')->group(function () {
         Route::get('/profile', [App\Http\Controllers\ProfileController::class, 'show']);

@@ -11,19 +11,43 @@ class BankAccountService {
         ? '${AppConfig.apiBaseUrl}/bank-accounts?organization_id=$organizationId'
         : '${AppConfig.apiBaseUrl}/bank-accounts';
 
-    final response = await http.get(
-      Uri.parse(url),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Accept': 'application/json',
-      },
-    );
+    try {
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Accept': 'application/json',
+        },
+      );
 
-    if (response.statusCode == 200) {
-      final List<dynamic> data = json.decode(response.body);
-      return data.map((json) => BankAccount.fromJson(json)).toList();
-    } else {
-      throw Exception('Failed to load bank accounts');
+      print('DEBUG: Bank accounts response status: ${response.statusCode}');
+      print('DEBUG: Bank accounts response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+        print('DEBUG: Decoded response type: ${responseData.runtimeType}');
+
+        // Handle both formats: direct array or wrapped in 'accounts' key
+        final List<dynamic> data;
+        if (responseData is List) {
+          data = responseData;
+        } else if (responseData is Map &&
+            responseData.containsKey('accounts')) {
+          data = responseData['accounts'] as List<dynamic>;
+        } else {
+          throw Exception('Unexpected response format: $responseData');
+        }
+
+        print('DEBUG: Parsing ${data.length} accounts');
+        return data
+            .map((json) => BankAccount.fromJson(json as Map<String, dynamic>))
+            .toList();
+      } else {
+        throw Exception('Failed to load bank accounts: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('DEBUG: Error in getBankAccounts: $e');
+      rethrow;
     }
   }
 
@@ -147,15 +171,24 @@ class BankAccountService {
   }
 
   Future<List<BankTransaction>> getTransactions(
-    String token,
-    int accountId,
+    String token, {
+    int? accountId,
+    int? organizationId,
     String? startDate,
     String? endDate,
-  ) async {
-    String url =
-        '${AppConfig.apiBaseUrl}/bank-transactions?account_id=$accountId';
-    if (startDate != null) url += '&start_date=$startDate';
-    if (endDate != null) url += '&end_date=$endDate';
+  }) async {
+    String url = '${AppConfig.apiBaseUrl}/bank-transactions?';
+
+    final queryParams = <String>[];
+    if (accountId != null) queryParams.add('account_id=$accountId');
+    if (organizationId != null)
+      queryParams.add('organization_id=$organizationId');
+    if (startDate != null) queryParams.add('start_date=$startDate');
+    if (endDate != null) queryParams.add('end_date=$endDate');
+
+    url += queryParams.join('&');
+
+    print('DEBUG: Fetching transactions from: $url');
 
     final response = await http.get(
       Uri.parse(url),
@@ -165,11 +198,16 @@ class BankAccountService {
       },
     );
 
+    print('DEBUG: Response status: ${response.statusCode}');
+    print('DEBUG: Response body: ${response.body}');
+
     if (response.statusCode == 200) {
       final List<dynamic> data = json.decode(response.body);
+      print('DEBUG: Parsed ${data.length} transactions');
       return data.map((json) => BankTransaction.fromJson(json)).toList();
     } else {
-      throw Exception('Failed to load transactions');
+      throw Exception(
+          'Failed to load transactions: ${response.statusCode} - ${response.body}');
     }
   }
 }
