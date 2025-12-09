@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\CreditNote;
 use App\Models\CreditNoteItem;
+use App\Models\BankAccount;
+use App\Models\BankTransaction;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -64,6 +66,9 @@ class CreditNoteController extends Controller
             'discount' => 'nullable|numeric|min:0',
             'tax' => 'nullable|numeric|min:0',
             'total_amount' => 'required|numeric|min:0',
+            'payment_mode' => 'nullable|string|max:50',
+            'bank_account_id' => 'nullable|exists:bank_accounts,id',
+            'amount_received' => 'nullable|numeric|min:0',
             'status' => 'required|in:draft,issued,applied',
             'reason' => 'nullable|string',
             'notes' => 'nullable|string',
@@ -111,6 +116,9 @@ class CreditNoteController extends Controller
                 'discount' => $request->discount ?? 0,
                 'tax' => $request->tax ?? 0,
                 'total_amount' => $request->total_amount,
+                'payment_mode' => $request->payment_mode ?? null,
+                'bank_account_id' => $request->bank_account_id ?? null,
+                'amount_received' => $request->amount_received ?? 0,
                 'status' => $request->status,
                 'reason' => $request->reason,
                 'notes' => $request->notes,
@@ -130,6 +138,11 @@ class CreditNoteController extends Controller
                     'tax_amount' => $item['tax_amount'] ?? 0,
                     'total' => $item['total'],
                 ]);
+            }
+
+            // Process payment if amount received
+            if (isset($request->amount_received) && $request->amount_received > 0) {
+                $this->processPayment($request, $organizationId, $creditNote);
             }
 
             DB::commit();
@@ -218,5 +231,73 @@ class CreditNoteController extends Controller
         $nextNumber = $lastCreditNote ? ((int)$lastCreditNote->credit_note_number + 1) : 1;
 
         return response()->json(['next_number' => $nextNumber]);
+    }
+
+    /**
+     * Process payment and update bank account balance
+     */
+    private function processPayment(Request $request, $organizationId, $creditNote)
+    {
+        $amount = $request->amount_received;
+        $paymentMode = $request->payment_mode ?? 'cash';
+        $description = "Credit Note Payment: {$creditNote->credit_note_number}";
+        
+        if (isset($request->notes)) {
+            $description .= " - {$request->notes}";
+        }
+
+        if ($paymentMode === 'cash') {
+            // Find or create "Cash in Hand" account
+            $cashAccount = BankAccount::firstOrCreate(
+                [
+                    'organization_id' => $organizationId,
+                    'account_name' => 'Cash in Hand',
+                    'account_type' => 'cash',
+                ],
+                [
+                    'user_id' => $request->user()->id,
+                    'opening_balance' => 0,
+                    'current_balance' => 0,
+                    'as_of_date' => now(),
+                ]
+            );
+
+            // Increase cash balance (payment received from customer)
+            $cashAccount->increment('current_balance', $amount);
+
+            // Create transaction record
+            BankTransaction::create([
+                'user_id' => $request->user()->id,
+                'organization_id' => $organizationId,
+                'account_id' => $cashAccount->id,
+                'transaction_type' => 'credit_note',
+                'amount' => $amount,
+                'transaction_date' => $request->credit_note_date,
+                'description' => $description,
+            ]);
+        } else {
+            // For non-cash payments, update the specified bank account
+            if (isset($request->bank_account_id) && $request->bank_account_id) {
+                $bankAccount = BankAccount::where('id', $request->bank_account_id)
+                    ->where('organization_id', $organizationId)
+                    ->first();
+
+                if ($bankAccount) {
+                    // Increase bank balance (payment received from customer)
+                    $bankAccount->increment('current_balance', $amount);
+
+                    // Create transaction record
+                    BankTransaction::create([
+                        'user_id' => $request->user()->id,
+                        'organization_id' => $organizationId,
+                        'account_id' => $bankAccount->id,
+                        'transaction_type' => 'credit_note',
+                        'amount' => $amount,
+                        'transaction_date' => $request->credit_note_date,
+                        'description' => $description,
+                    ]);
+                }
+            }
+        }
     }
 }

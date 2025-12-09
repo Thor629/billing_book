@@ -11,6 +11,9 @@ class CreditNote {
   final double discount;
   final double tax;
   final double totalAmount;
+  final String? paymentMode;
+  final int? bankAccountId;
+  final double amountReceived;
   final String status;
   final String? reason;
   final String? notes;
@@ -31,6 +34,9 @@ class CreditNote {
     required this.discount,
     required this.tax,
     required this.totalAmount,
+    this.paymentMode,
+    this.bankAccountId,
+    required this.amountReceived,
     required this.status,
     this.reason,
     this.notes,
@@ -41,23 +47,30 @@ class CreditNote {
 
   factory CreditNote.fromJson(Map<String, dynamic> json) {
     return CreditNote(
-      id: json['id'],
-      organizationId: json['organization_id'],
-      partyId: json['party_id'],
-      userId: json['user_id'],
-      salesInvoiceId: json['sales_invoice_id'],
-      creditNoteNumber: json['credit_note_number'],
+      id: int.parse(json['id'].toString()),
+      organizationId: int.parse(json['organization_id'].toString()),
+      partyId: int.parse(json['party_id'].toString()),
+      userId: int.parse(json['user_id'].toString()),
+      salesInvoiceId: json['sales_invoice_id'] != null
+          ? int.parse(json['sales_invoice_id'].toString())
+          : null,
+      creditNoteNumber: json['credit_note_number'] ?? '',
       creditNoteDate: DateTime.parse(json['credit_note_date']),
       invoiceNumber: json['invoice_number'],
       subtotal: double.parse(json['subtotal'].toString()),
       discount: double.parse(json['discount'].toString()),
       tax: double.parse(json['tax'].toString()),
       totalAmount: double.parse(json['total_amount'].toString()),
-      status: json['status'],
+      paymentMode: json['payment_mode'],
+      bankAccountId: json['bank_account_id'] != null
+          ? int.parse(json['bank_account_id'].toString())
+          : null,
+      amountReceived: double.parse(json['amount_received']?.toString() ?? '0'),
+      status: json['status'] ?? 'draft',
       reason: json['reason'],
       notes: json['notes'],
       termsConditions: json['terms_conditions'],
-      partyName: json['party']?['name'],
+      partyName: json['party']?['name'] ?? '',
       items: json['items'] != null
           ? (json['items'] as List)
               .map((item) => CreditNoteItem.fromJson(item))
@@ -80,6 +93,9 @@ class CreditNote {
       'discount': discount,
       'tax': tax,
       'total_amount': totalAmount,
+      'payment_mode': paymentMode,
+      'bank_account_id': bankAccountId,
+      'amount_received': amountReceived,
       'status': status,
       'reason': reason,
       'notes': notes,
@@ -119,9 +135,9 @@ class CreditNoteItem {
 
   factory CreditNoteItem.fromJson(Map<String, dynamic> json) {
     return CreditNoteItem(
-      id: json['id'],
-      creditNoteId: json['credit_note_id'],
-      itemId: json['item_id'],
+      id: int.parse(json['id'].toString()),
+      creditNoteId: int.parse(json['credit_note_id'].toString()),
+      itemId: int.parse(json['item_id'].toString()),
       hsnSac: json['hsn_sac'],
       itemCode: json['item_code'],
       quantity: double.parse(json['quantity'].toString()),
@@ -130,7 +146,7 @@ class CreditNoteItem {
       taxRate: double.parse(json['tax_rate'].toString()),
       taxAmount: double.parse(json['tax_amount'].toString()),
       total: double.parse(json['total'].toString()),
-      itemName: json['item']?['name'],
+      itemName: json['item']?['name'] ?? '',
     );
   }
 

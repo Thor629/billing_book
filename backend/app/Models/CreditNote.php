@@ -22,6 +22,9 @@ class CreditNote extends Model
         'discount',
         'tax',
         'total_amount',
+        'payment_mode',
+        'bank_account_id',
+        'amount_received',
         'status',
         'reason',
         'notes',
@@ -59,5 +62,10 @@ class CreditNote extends Model
     public function items()
     {
         return $this->hasMany(CreditNoteItem::class);
+    }
+
+    public function bankAccount()
+    {
+        return $this->belongsTo(BankAccount::class);
     }
 }
