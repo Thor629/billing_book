@@ -19,6 +19,8 @@ import 'purchase_invoices_screen.dart';
 import 'cash_bank_screen.dart';
 import 'expenses_screen.dart';
 import 'delivery_challan_screen.dart';
+import 'payment_out_screen.dart';
+import 'purchase_return_screen.dart';
 
 class UserDashboard extends StatefulWidget {
   const UserDashboard({super.key});
@@ -428,9 +430,9 @@ class _UserDashboardState extends State<UserDashboard> {
       case 14:
         return const PurchaseInvoicesScreen();
       case 15:
-        return _buildPlaceholderScreen('Payment Out');
+        return const PaymentOutScreen();
       case 16:
-        return _buildPlaceholderScreen('Purchase Return');
+        return const PurchaseReturnScreen();
       case 17:
         return _buildPlaceholderScreen('Debit Note');
       case 18:

@@ -611,6 +611,18 @@ class _CashBankScreenState extends State<CashBankScreen> {
         amountPrefix = '-';
         typeLabel = 'Payment Out';
         break;
+      case 'sales_return':
+        icon = Icons.assignment_return;
+        amountColor = Colors.orange;
+        amountPrefix = '-';
+        typeLabel = 'Sales Return';
+        break;
+      case 'purchase_return':
+        icon = Icons.assignment_return_outlined;
+        amountColor = Colors.blue;
+        amountPrefix = '+';
+        typeLabel = 'Purchase Return';
+        break;
       case 'transfer_in':
         icon = Icons.arrow_downward;
         amountColor = Colors.green;

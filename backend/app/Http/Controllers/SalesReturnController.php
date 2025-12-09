@@ -4,6 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\SalesReturn;
 use App\Models\SalesReturnItem;
+use App\Models\Item;
+use App\Models\BankAccount;
+use App\Models\BankTransaction;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -82,6 +85,7 @@ class SalesReturnController extends Controller
             'total_amount' => 'required|numeric|min:0',
             'amount_paid' => 'nullable|numeric|min:0',
             'payment_mode' => 'nullable|string|max:50',
+            'bank_account_id' => 'nullable|exists:bank_accounts,id',
             'status' => 'required|in:unpaid,refunded',
             'notes' => 'nullable|string',
             'terms_conditions' => 'nullable|string',
@@ -149,7 +153,7 @@ class SalesReturnController extends Controller
                 'terms_conditions' => $request->terms_conditions,
             ]);
 
-            // Create sales return items
+            // Create sales return items and update stock
             foreach ($request->items as $item) {
                 SalesReturnItem::create([
                     'sales_return_id' => $salesReturn->id,
@@ -163,6 +167,17 @@ class SalesReturnController extends Controller
                     'tax_amount' => $item['tax_amount'] ?? 0,
                     'total' => $item['total'],
                 ]);
+
+                // Increase stock (items returned to inventory)
+                $inventoryItem = Item::find($item['item_id']);
+                if ($inventoryItem) {
+                    $inventoryItem->increment('stock_qty', $item['quantity']);
+                }
+            }
+
+            // Process refund if status is refunded
+            if ($request->status === 'refunded' && $request->amount_paid > 0) {
+                $this->processRefund($request, $organizationId, $salesReturn);
             }
 
             DB::commit();
@@ -291,5 +306,73 @@ class SalesReturnController extends Controller
         return response()->json([
             'next_number' => $nextNumber,
         ]);
+    }
+
+    /**
+     * Process refund and update bank account balance
+     */
+    private function processRefund(Request $request, $organizationId, $salesReturn)
+    {
+        $amount = $request->amount_paid;
+        $paymentMode = $request->payment_mode ?? 'cash';
+        $description = "Sales Return Refund: {$salesReturn->return_number}";
+        
+        if ($request->notes) {
+            $description .= " - {$request->notes}";
+        }
+
+        if ($paymentMode === 'cash') {
+            // Find or create "Cash in Hand" account
+            $cashAccount = BankAccount::firstOrCreate(
+                [
+                    'organization_id' => $organizationId,
+                    'account_name' => 'Cash in Hand',
+                    'account_type' => 'cash',
+                ],
+                [
+                    'user_id' => $request->user()->id,
+                    'opening_balance' => 0,
+                    'current_balance' => 0,
+                    'as_of_date' => now(),
+                ]
+            );
+
+            // Decrease cash balance (refund to customer)
+            $cashAccount->decrement('current_balance', $amount);
+
+            // Create transaction record
+            BankTransaction::create([
+                'user_id' => $request->user()->id,
+                'organization_id' => $organizationId,
+                'account_id' => $cashAccount->id,
+                'transaction_type' => 'sales_return',
+                'amount' => $amount,
+                'transaction_date' => $request->return_date,
+                'description' => $description,
+            ]);
+        } else {
+            // For non-cash refunds, update the specified bank account
+            if ($request->has('bank_account_id') && $request->bank_account_id) {
+                $bankAccount = BankAccount::where('id', $request->bank_account_id)
+                    ->where('organization_id', $organizationId)
+                    ->first();
+
+                if ($bankAccount) {
+                    // Decrease bank balance (refund to customer)
+                    $bankAccount->decrement('current_balance', $amount);
+
+                    // Create transaction record
+                    BankTransaction::create([
+                        'user_id' => $request->user()->id,
+                        'organization_id' => $organizationId,
+                        'account_id' => $bankAccount->id,
+                        'transaction_type' => 'sales_return',
+                        'amount' => $amount,
+                        'transaction_date' => $request->return_date,
+                        'description' => $description,
+                    ]);
+                }
+            }
+        }
     }
 }

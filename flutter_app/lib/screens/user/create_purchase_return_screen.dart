@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../services/sales_return_service.dart';
+import '../../services/purchase_return_service.dart';
 import '../../services/party_service.dart';
 import '../../services/item_service.dart';
 import '../../services/bank_account_service.dart';
@@ -10,16 +10,17 @@ import '../../models/bank_account_model.dart';
 import '../../providers/organization_provider.dart';
 import '../../providers/auth_provider.dart';
 
-class CreateSalesReturnScreen extends StatefulWidget {
-  const CreateSalesReturnScreen({super.key});
+class CreatePurchaseReturnScreen extends StatefulWidget {
+  const CreatePurchaseReturnScreen({super.key});
 
   @override
-  State<CreateSalesReturnScreen> createState() =>
-      _CreateSalesReturnScreenState();
+  State<CreatePurchaseReturnScreen> createState() =>
+      _CreatePurchaseReturnScreenState();
 }
 
-class _CreateSalesReturnScreenState extends State<CreateSalesReturnScreen> {
-  final SalesReturnService _returnService = SalesReturnService();
+class _CreatePurchaseReturnScreenState
+    extends State<CreatePurchaseReturnScreen> {
+  final PurchaseReturnService _returnService = PurchaseReturnService();
   final PartyService _partyService = PartyService();
   final ItemService _itemService = ItemService();
   final BankAccountService _bankAccountService = BankAccountService();
@@ -29,14 +30,15 @@ class _CreateSalesReturnScreenState extends State<CreateSalesReturnScreen> {
   final TextEditingController _invoiceSearchController =
       TextEditingController();
   final TextEditingController _notesController = TextEditingController();
-  final TextEditingController _amountPaidController = TextEditingController();
+  final TextEditingController _amountReceivedController =
+      TextEditingController();
 
   DateTime _returnDate = DateTime.now();
   int? _selectedPartyId;
   String? _selectedPartyName;
   String? _linkedInvoiceNumber;
   bool _isSaving = false;
-  bool _isFullyPaid = false;
+  bool _isFullyReceived = false;
   String _paymentMode = 'Cash';
 
   List<ReturnItem> _items = [];
@@ -76,10 +78,15 @@ class _CreateSalesReturnScreenState extends State<CreateSalesReturnScreen> {
           orgProvider.selectedOrganization!.id,
         );
 
+        // Get next return number
+        final nextNumber = await _returnService
+            .getNextReturnNumber(orgProvider.selectedOrganization!.id);
+
         setState(() {
           _parties = parties;
           _availableItems = items;
           _bankAccounts = accounts;
+          _returnNumberController.text = nextNumber;
         });
       } catch (e) {
         if (mounted) {
@@ -103,7 +110,7 @@ class _CreateSalesReturnScreenState extends State<CreateSalesReturnScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          'Create Sales Return',
+          'Create Purchase Return',
           style: TextStyle(color: Colors.black, fontSize: 18),
         ),
         actions: [
@@ -152,9 +159,9 @@ class _CreateSalesReturnScreenState extends State<CreateSalesReturnScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Bill To
+                    // Supplier
                     const Text(
-                      'Bill To',
+                      'Supplier',
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
@@ -376,9 +383,9 @@ class _CreateSalesReturnScreenState extends State<CreateSalesReturnScreen> {
                               ),
                               const SizedBox(height: 16),
                               TextField(
-                                controller: _amountPaidController,
+                                controller: _amountReceivedController,
                                 decoration: const InputDecoration(
-                                  labelText: 'Enter Payment amount',
+                                  labelText: 'Enter Refund amount',
                                   border: OutlineInputBorder(),
                                 ),
                                 keyboardType: TextInputType.number,
@@ -387,28 +394,28 @@ class _CreateSalesReturnScreenState extends State<CreateSalesReturnScreen> {
                               Row(
                                 children: [
                                   Checkbox(
-                                    value: _isFullyPaid,
+                                    value: _isFullyReceived,
                                     onChanged: (value) {
                                       setState(() {
-                                        _isFullyPaid = value ?? false;
-                                        if (_isFullyPaid) {
-                                          _amountPaidController.text =
+                                        _isFullyReceived = value ?? false;
+                                        if (_isFullyReceived) {
+                                          _amountReceivedController.text =
                                               _totalAmount.toStringAsFixed(2);
                                         }
                                       });
                                     },
                                   ),
-                                  const Text('Mark as fully paid'),
+                                  const Text('Mark as fully received'),
                                 ],
                               ),
                               const SizedBox(height: 16),
                               Row(
                                 children: [
-                                  const Text('Amount Paid'),
+                                  const Text('Amount Received'),
                                   const SizedBox(width: 16),
                                   Expanded(
                                     child: TextField(
-                                      controller: _amountPaidController,
+                                      controller: _amountReceivedController,
                                       decoration: const InputDecoration(
                                         prefixText: '₹ ',
                                         border: OutlineInputBorder(),
@@ -485,9 +492,9 @@ class _CreateSalesReturnScreenState extends State<CreateSalesReturnScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Sales Return No
+                    // Purchase Return No
                     const Text(
-                      'Sales Return No.',
+                      'Purchase Return No.',
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
@@ -507,9 +514,9 @@ class _CreateSalesReturnScreenState extends State<CreateSalesReturnScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Sales Return Date
+                    // Purchase Return Date
                     const Text(
-                      'Sales Return Date',
+                      'Purchase Return Date',
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
@@ -667,7 +674,7 @@ class _CreateSalesReturnScreenState extends State<CreateSalesReturnScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
-                    'Select Party',
+                    'Select Supplier',
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
@@ -683,7 +690,7 @@ class _CreateSalesReturnScreenState extends State<CreateSalesReturnScreen> {
               const Divider(),
               Expanded(
                 child: _parties.isEmpty
-                    ? const Center(child: Text('No parties found'))
+                    ? const Center(child: Text('No suppliers found'))
                     : ListView.builder(
                         shrinkWrap: true,
                         itemCount: _parties.length,
@@ -754,7 +761,7 @@ class _CreateSalesReturnScreenState extends State<CreateSalesReturnScreen> {
                           final item = _availableItems[index];
                           return ListTile(
                             title: Text(item.itemName),
-                            subtitle: Text('₹${item.sellingPrice}'),
+                            subtitle: Text('₹${item.purchasePrice}'),
                             onTap: () => Navigator.pop(context, item),
                           );
                         },
@@ -774,10 +781,10 @@ class _CreateSalesReturnScreenState extends State<CreateSalesReturnScreen> {
           hsnSac: selectedItem.hsnCode,
           itemCode: selectedItem.itemCode,
           quantity: 1,
-          price: selectedItem.sellingPrice,
+          price: selectedItem.purchasePrice,
           discount: 0,
           taxRate: selectedItem.gstRate,
-          taxAmount: (selectedItem.sellingPrice * selectedItem.gstRate) / 100,
+          taxAmount: (selectedItem.purchasePrice * selectedItem.gstRate) / 100,
         ));
       });
     }
@@ -798,7 +805,7 @@ class _CreateSalesReturnScreenState extends State<CreateSalesReturnScreen> {
 
     if (_selectedPartyId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a party')),
+        const SnackBar(content: Text('Please select a supplier')),
       );
       return;
     }
@@ -813,36 +820,41 @@ class _CreateSalesReturnScreenState extends State<CreateSalesReturnScreen> {
     setState(() => _isSaving = true);
 
     try {
-      final amountPaid = double.tryParse(_amountPaidController.text) ?? 0;
-      final status = amountPaid >= _totalAmount ? 'refunded' : 'unpaid';
+      final amountReceived =
+          double.tryParse(_amountReceivedController.text) ?? 0;
+      final status = amountReceived >= _totalAmount ? 'approved' : 'pending';
 
       final returnData = {
-        'organization_id': orgProvider.selectedOrganization!.id,
         'party_id': _selectedPartyId,
         'return_number': _returnNumberController.text,
         'return_date': _returnDate.toIso8601String().split('T')[0],
-        'invoice_number': _linkedInvoiceNumber,
-        'subtotal': _subtotal,
-        'discount': _discount,
-        'tax': _tax,
-        'total_amount': _totalAmount,
-        'amount_paid': amountPaid,
-        'payment_mode': _paymentMode,
+        'status': status,
+        'payment_mode': _paymentMode.toLowerCase(),
         if (_selectedBankAccountId != null)
           'bank_account_id': _selectedBankAccountId,
-        'status': status,
+        'amount_received': amountReceived,
+        'reason': _notesController.text.isEmpty ? null : _notesController.text,
         'notes': _notesController.text.isEmpty ? null : _notesController.text,
-        'terms_conditions':
-            '1. Goods once sold will not be taken back or exchanged\n2. All disputes are subject to SURAT jurisdiction only',
-        'items': _items.map((item) => item.toJson()).toList(),
+        'items': _items
+            .map((item) => {
+                  'item_id': item.itemId,
+                  'quantity': item.quantity,
+                  'rate': item.price,
+                  'tax_rate': item.taxRate,
+                  'unit': 'pcs',
+                })
+            .toList(),
       };
 
-      await _returnService.createReturn(returnData);
+      await _returnService.createPurchaseReturn(
+        orgProvider.selectedOrganization!.id,
+        returnData,
+      );
 
       if (mounted) {
         Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Sales return created successfully')),
+          const SnackBar(content: Text('Purchase return created successfully')),
         );
       }
     } catch (e) {
@@ -881,7 +893,7 @@ class _CreateSalesReturnScreenState extends State<CreateSalesReturnScreen> {
     _returnNumberController.dispose();
     _invoiceSearchController.dispose();
     _notesController.dispose();
-    _amountPaidController.dispose();
+    _amountReceivedController.dispose();
     super.dispose();
   }
 }

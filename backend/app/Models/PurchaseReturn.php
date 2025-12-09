@@ -19,6 +19,9 @@ class PurchaseReturn extends Model
         'subtotal',
         'tax_amount',
         'total_amount',
+        'payment_mode',
+        'bank_account_id',
+        'amount_received',
         'status',
         'reason',
         'notes',
@@ -49,5 +52,10 @@ class PurchaseReturn extends Model
     public function items()
     {
         return $this->hasMany(PurchaseReturnItem::class);
+    }
+
+    public function bankAccount()
+    {
+        return $this->belongsTo(BankAccount::class);
     }
 }

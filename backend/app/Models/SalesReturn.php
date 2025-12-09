@@ -24,6 +24,7 @@ class SalesReturn extends Model
         'total_amount',
         'amount_paid',
         'payment_mode',
+        'bank_account_id',
         'status',
         'notes',
         'terms_conditions',
@@ -61,5 +62,10 @@ class SalesReturn extends Model
     public function items()
     {
         return $this->hasMany(SalesReturnItem::class);
+    }
+
+    public function bankAccount()
+    {
+        return $this->belongsTo(BankAccount::class);
     }
 }
