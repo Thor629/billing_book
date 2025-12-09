@@ -192,6 +192,8 @@ class _CreditNoteScreenState extends State<CreditNoteScreen> {
                               DataColumn(label: Text('Party Name')),
                               DataColumn(label: Text('Invoice No')),
                               DataColumn(label: Text('Amount')),
+                              DataColumn(label: Text('Amount Received')),
+                              DataColumn(label: Text('Payment Mode')),
                               DataColumn(label: Text('Status')),
                               DataColumn(label: Text('Actions')),
                             ],
@@ -204,6 +206,9 @@ class _CreditNoteScreenState extends State<CreditNoteScreen> {
                                 DataCell(Text(creditNote.invoiceNumber ?? '-')),
                                 DataCell(Text(
                                     '₹ ${creditNote.totalAmount.toStringAsFixed(2)}')),
+                                DataCell(Text(
+                                    '₹ ${creditNote.amountReceived.toStringAsFixed(2)}')),
+                                DataCell(Text(creditNote.paymentMode ?? '-')),
                                 DataCell(
                                   Container(
                                     padding: const EdgeInsets.symmetric(

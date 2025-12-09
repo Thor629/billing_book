@@ -14,8 +14,7 @@ class CreateCreditNoteScreen extends StatefulWidget {
   const CreateCreditNoteScreen({super.key});
 
   @override
-  State<CreateCreditNoteScreen> createState() =>
-      _CreateCreditNoteScreenState();
+  State<CreateCreditNoteScreen> createState() => _CreateCreditNoteScreenState();
 }
 
 class _CreateCreditNoteScreenState extends State<CreateCreditNoteScreen> {
@@ -112,9 +111,22 @@ class _CreateCreditNoteScreenState extends State<CreateCreditNoteScreen> {
             icon: const Icon(Icons.settings_outlined, color: Colors.black),
             onPressed: () {},
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Save Credit Note'),
+          ElevatedButton(
+            onPressed: _isSaving ? null : _saveCreditNote,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.purple[700],
+              foregroundColor: Colors.white,
+            ),
+            child: _isSaving
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : const Text('Save'),
           ),
           const SizedBox(width: 16),
         ],
@@ -603,3 +615,313 @@ class _CreateCreditNoteScreenState extends State<CreateCreditNoteScreen> {
       ),
     );
   }
+
+  Widget _buildItemRow(int index, CreditNoteItemRow item) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: Colors.grey[300]!)),
+      ),
+      child: Row(
+        children: [
+          SizedBox(width: 40, child: Text('${index + 1}')),
+          Expanded(flex: 3, child: Text(item.itemName)),
+          Expanded(child: Text(item.hsnSac ?? '-')),
+          Expanded(child: Text(item.quantity.toStringAsFixed(0))),
+          Expanded(child: Text(item.price.toStringAsFixed(2))),
+          Expanded(child: Text(item.discount.toStringAsFixed(2))),
+          Expanded(child: Text('${item.taxRate.toStringAsFixed(0)}%')),
+          Expanded(
+              child: Text((item.price * item.quantity).toStringAsFixed(2))),
+          SizedBox(
+            width: 40,
+            child: IconButton(
+              icon: const Icon(Icons.close, size: 16),
+              onPressed: () {
+                setState(() {
+                  _items.removeAt(index);
+                });
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showPartySelectionDialog() async {
+    final selectedParty = await showDialog<PartyModel>(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Container(
+          width: 500,
+          constraints: const BoxConstraints(maxHeight: 600),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Select Party',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              const Divider(),
+              Expanded(
+                child: _parties.isEmpty
+                    ? const Center(child: Text('No parties found'))
+                    : ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: _parties.length,
+                        itemBuilder: (context, index) {
+                          final party = _parties[index];
+                          return ListTile(
+                            title: Text(party.name),
+                            subtitle: Text(party.phone),
+                            onTap: () => Navigator.pop(context, party),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (selectedParty != null) {
+      setState(() {
+        _selectedPartyId = selectedParty.id;
+        _selectedPartyName = selectedParty.name;
+      });
+    }
+  }
+
+  Future<void> _showAddItemDialog() async {
+    final selectedItem = await showDialog<ItemModel>(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Container(
+          width: 500,
+          constraints: const BoxConstraints(maxHeight: 600),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Select Item',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              const Divider(),
+              Expanded(
+                child: _availableItems.isEmpty
+                    ? const Center(child: Text('No items found'))
+                    : ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: _availableItems.length,
+                        itemBuilder: (context, index) {
+                          final item = _availableItems[index];
+                          return ListTile(
+                            title: Text(item.itemName),
+                            subtitle: Text('₹${item.sellingPrice}'),
+                            onTap: () => Navigator.pop(context, item),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (selectedItem != null) {
+      setState(() {
+        _items.add(CreditNoteItemRow(
+          itemId: selectedItem.id,
+          itemName: selectedItem.itemName,
+          hsnSac: selectedItem.hsnCode,
+          itemCode: selectedItem.itemCode,
+          quantity: 1,
+          price: selectedItem.sellingPrice,
+          discount: 0,
+          taxRate: selectedItem.gstRate,
+          taxAmount: (selectedItem.sellingPrice * selectedItem.gstRate) / 100,
+        ));
+      });
+    }
+  }
+
+  Future<void> _saveCreditNote() async {
+    final orgProvider =
+        Provider.of<OrganizationProvider>(context, listen: false);
+
+    if (orgProvider.selectedOrganization == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please select an organization first')),
+        );
+      }
+      return;
+    }
+
+    if (_selectedPartyId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a party')),
+      );
+      return;
+    }
+
+    if (_items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please add at least one item')),
+      );
+      return;
+    }
+
+    setState(() => _isSaving = true);
+
+    try {
+      final amountReceived =
+          double.tryParse(_amountReceivedController.text) ?? 0;
+      final status = amountReceived >= _totalAmount ? 'issued' : 'draft';
+
+      final creditNoteData = {
+        'organization_id': orgProvider.selectedOrganization!.id,
+        'party_id': _selectedPartyId,
+        'credit_note_number': _creditNoteNumberController.text,
+        'credit_note_date': _creditNoteDate.toIso8601String().split('T')[0],
+        'invoice_number': _linkedInvoiceNumber,
+        'subtotal': _subtotal,
+        'discount': _discount,
+        'tax': _tax,
+        'total_amount': _totalAmount,
+        'payment_mode': _paymentMode.toLowerCase(),
+        if (_selectedBankAccountId != null)
+          'bank_account_id': _selectedBankAccountId,
+        'amount_received': amountReceived,
+        'status': status,
+        'notes': _notesController.text.isEmpty ? null : _notesController.text,
+        'terms_conditions':
+            '1. Goods once sold will not be taken back or exchanged\n2. All disputes are subject to [ENTER_YOUR_CITY_NAME] jurisdiction only',
+        'items': _items.map((item) => item.toJson()).toList(),
+      };
+
+      await _creditNoteService.createCreditNote(creditNoteData);
+
+      if (mounted) {
+        Navigator.pop(context, true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Credit note created successfully')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error creating credit note: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  String _getMonthName(int month) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
+    ];
+    return months[month - 1];
+  }
+
+  @override
+  void dispose() {
+    _creditNoteNumberController.dispose();
+    _invoiceSearchController.dispose();
+    _notesController.dispose();
+    _amountReceivedController.dispose();
+    super.dispose();
+  }
+}
+
+class CreditNoteItemRow {
+  final int itemId;
+  final String itemName;
+  final String? hsnSac;
+  final String? itemCode;
+  double quantity;
+  final double price;
+  final double discount;
+  final double taxRate;
+  final double taxAmount;
+
+  CreditNoteItemRow({
+    required this.itemId,
+    required this.itemName,
+    this.hsnSac,
+    this.itemCode,
+    required this.quantity,
+    required this.price,
+    required this.discount,
+    required this.taxRate,
+    required this.taxAmount,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'item_id': itemId,
+      'hsn_sac': hsnSac,
+      'item_code': itemCode,
+      'quantity': quantity,
+      'price': price,
+      'discount': discount,
+      'tax_rate': taxRate,
+      'tax_amount': taxAmount,
+      'total': price * quantity,
+    };
+  }
+}
