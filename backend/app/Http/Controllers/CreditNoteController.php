@@ -238,66 +238,99 @@ class CreditNoteController extends Controller
      */
     private function processPayment(Request $request, $organizationId, $creditNote)
     {
-        $amount = $request->amount_received;
-        $paymentMode = $request->payment_mode ?? 'cash';
-        $description = "Credit Note Payment: {$creditNote->credit_note_number}";
-        
-        if (isset($request->notes)) {
-            $description .= " - {$request->notes}";
-        }
+        try {
+            $amount = $request->amount_received;
+            $paymentMode = strtolower($request->payment_mode ?? 'cash');
+            $description = "Credit Note Payment: {$creditNote->credit_note_number}";
+            
+            if (isset($request->notes) && $request->notes) {
+                $description .= " - {$request->notes}";
+            }
 
-        if ($paymentMode === 'cash') {
-            // Find or create "Cash in Hand" account
-            $cashAccount = BankAccount::firstOrCreate(
-                [
-                    'organization_id' => $organizationId,
-                    'account_name' => 'Cash in Hand',
-                    'account_type' => 'cash',
-                ],
-                [
-                    'user_id' => $request->user()->id,
-                    'opening_balance' => 0,
-                    'current_balance' => 0,
-                    'as_of_date' => now(),
-                ]
-            );
-
-            // Increase cash balance (payment received from customer)
-            $cashAccount->increment('current_balance', $amount);
-
-            // Create transaction record
-            BankTransaction::create([
-                'user_id' => $request->user()->id,
-                'organization_id' => $organizationId,
-                'account_id' => $cashAccount->id,
-                'transaction_type' => 'credit_note',
+            \Log::info('Processing credit note payment', [
                 'amount' => $amount,
-                'transaction_date' => $request->credit_note_date,
-                'description' => $description,
+                'payment_mode' => $paymentMode,
+                'organization_id' => $organizationId,
+                'credit_note_id' => $creditNote->id,
             ]);
-        } else {
-            // For non-cash payments, update the specified bank account
-            if (isset($request->bank_account_id) && $request->bank_account_id) {
-                $bankAccount = BankAccount::where('id', $request->bank_account_id)
-                    ->where('organization_id', $organizationId)
-                    ->first();
 
-                if ($bankAccount) {
-                    // Increase bank balance (payment received from customer)
-                    $bankAccount->increment('current_balance', $amount);
-
-                    // Create transaction record
-                    BankTransaction::create([
-                        'user_id' => $request->user()->id,
+            if ($paymentMode === 'cash') {
+                // Find or create "Cash in Hand" account
+                $cashAccount = BankAccount::firstOrCreate(
+                    [
                         'organization_id' => $organizationId,
-                        'account_id' => $bankAccount->id,
-                        'transaction_type' => 'credit_note',
-                        'amount' => $amount,
-                        'transaction_date' => $request->credit_note_date,
-                        'description' => $description,
-                    ]);
+                        'account_name' => 'Cash in Hand',
+                        'account_type' => 'cash',
+                    ],
+                    [
+                        'user_id' => $request->user()->id,
+                        'opening_balance' => 0,
+                        'current_balance' => 0,
+                        'as_of_date' => now(),
+                    ]
+                );
+
+                \Log::info('Cash account found/created', ['account_id' => $cashAccount->id, 'current_balance' => $cashAccount->current_balance]);
+
+                // Increase cash balance (payment received from customer)
+                $cashAccount->increment('current_balance', $amount);
+
+                \Log::info('Cash balance updated', ['new_balance' => $cashAccount->fresh()->current_balance]);
+
+                // Create transaction record
+                $transaction = BankTransaction::create([
+                    'user_id' => $request->user()->id,
+                    'organization_id' => $organizationId,
+                    'account_id' => $cashAccount->id,
+                    'transaction_type' => 'credit_note',
+                    'amount' => $amount,
+                    'transaction_date' => $request->credit_note_date,
+                    'description' => $description,
+                ]);
+
+                \Log::info('Transaction created', ['transaction_id' => $transaction->id]);
+            } else {
+                // For non-cash payments, update the specified bank account
+                \Log::info('Processing bank payment', ['bank_account_id' => $request->bank_account_id]);
+
+                if (isset($request->bank_account_id) && $request->bank_account_id) {
+                    $bankAccount = BankAccount::where('id', $request->bank_account_id)
+                        ->where('organization_id', $organizationId)
+                        ->first();
+
+                    if ($bankAccount) {
+                        \Log::info('Bank account found', ['account_id' => $bankAccount->id, 'current_balance' => $bankAccount->current_balance]);
+
+                        // Increase bank balance (payment received from customer)
+                        $bankAccount->increment('current_balance', $amount);
+
+                        \Log::info('Bank balance updated', ['new_balance' => $bankAccount->fresh()->current_balance]);
+
+                        // Create transaction record
+                        $transaction = BankTransaction::create([
+                            'user_id' => $request->user()->id,
+                            'organization_id' => $organizationId,
+                            'account_id' => $bankAccount->id,
+                            'transaction_type' => 'credit_note',
+                            'amount' => $amount,
+                            'transaction_date' => $request->credit_note_date,
+                            'description' => $description,
+                        ]);
+
+                        \Log::info('Bank transaction created', ['transaction_id' => $transaction->id]);
+                    } else {
+                        \Log::warning('Bank account not found', ['bank_account_id' => $request->bank_account_id]);
+                    }
+                } else {
+                    \Log::warning('No bank account ID provided for non-cash payment');
                 }
             }
+        } catch (\Exception $e) {
+            \Log::error('Error processing credit note payment', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            throw $e;
         }
     }
 }

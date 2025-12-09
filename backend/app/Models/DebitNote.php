@@ -19,6 +19,9 @@ class DebitNote extends Model
         'subtotal',
         'tax_amount',
         'total_amount',
+        'payment_mode',
+        'bank_account_id',
+        'amount_paid',
         'status',
         'reason',
         'notes',
@@ -49,5 +52,10 @@ class DebitNote extends Model
     public function items()
     {
         return $this->hasMany(DebitNoteItem::class);
+    }
+
+    public function bankAccount()
+    {
+        return $this->belongsTo(BankAccount::class);
     }
 }

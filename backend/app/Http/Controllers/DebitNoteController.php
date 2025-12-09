@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\DebitNote;
+use App\Models\BankAccount;
+use App\Models\BankTransaction;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -25,6 +27,9 @@ class DebitNoteController extends Controller
             'purchase_invoice_id' => 'nullable|exists:purchase_invoices,id',
             'debit_note_number' => 'required|unique:debit_notes',
             'debit_note_date' => 'required|date',
+            'payment_mode' => 'nullable|string|max:50',
+            'bank_account_id' => 'nullable|exists:bank_accounts,id',
+            'amount_paid' => 'nullable|numeric|min:0',
             'status' => 'required|in:draft,issued,cancelled',
             'reason' => 'nullable|string',
             'notes' => 'nullable|string',
@@ -56,6 +61,9 @@ class DebitNoteController extends Controller
                 'subtotal' => $subtotal,
                 'tax_amount' => $taxAmount,
                 'total_amount' => $subtotal + $taxAmount,
+                'payment_mode' => $validated['payment_mode'] ?? null,
+                'bank_account_id' => $validated['bank_account_id'] ?? null,
+                'amount_paid' => $validated['amount_paid'] ?? 0,
                 'status' => $validated['status'],
                 'reason' => $validated['reason'] ?? null,
                 'notes' => $validated['notes'] ?? null,
@@ -74,6 +82,11 @@ class DebitNoteController extends Controller
                     'tax_rate' => $item['tax_rate'] ?? 0,
                     'amount' => $itemSubtotal + $itemTax,
                 ]);
+            }
+
+            // Process payment if amount paid
+            if (isset($validated['amount_paid']) && $validated['amount_paid'] > 0) {
+                $this->processPayment($request, $request->header('X-Organization-Id'), $debitNote, $validated);
             }
 
             return response()->json($debitNote->load(['party', 'items.item']), 201);
@@ -110,5 +123,106 @@ class DebitNoteController extends Controller
             : 'DN-000001';
 
         return response()->json(['next_number' => $nextNumber]);
+    }
+
+    /**
+     * Process payment and update bank account balance (DECREASE for debit note)
+     */
+    private function processPayment(Request $request, $organizationId, $debitNote, $validated)
+    {
+        try {
+            $amount = $validated['amount_paid'];
+            $paymentMode = strtolower($validated['payment_mode'] ?? 'cash');
+            $description = "Debit Note Payment: {$debitNote->debit_note_number}";
+            
+            if (isset($validated['notes']) && $validated['notes']) {
+                $description .= " - {$validated['notes']}";
+            }
+
+            \Log::info('Processing debit note payment', [
+                'amount' => $amount,
+                'payment_mode' => $paymentMode,
+                'organization_id' => $organizationId,
+                'debit_note_id' => $debitNote->id,
+            ]);
+
+            if ($paymentMode === 'cash') {
+                // Find or create "Cash in Hand" account
+                $cashAccount = BankAccount::firstOrCreate(
+                    [
+                        'organization_id' => $organizationId,
+                        'account_name' => 'Cash in Hand',
+                        'account_type' => 'cash',
+                    ],
+                    [
+                        'user_id' => $request->user()->id,
+                        'opening_balance' => 0,
+                        'current_balance' => 0,
+                        'as_of_date' => now(),
+                    ]
+                );
+
+                \Log::info('Cash account found/created', ['account_id' => $cashAccount->id, 'current_balance' => $cashAccount->current_balance]);
+
+                // DECREASE cash balance (payment made to supplier)
+                $cashAccount->decrement('current_balance', $amount);
+
+                \Log::info('Cash balance updated', ['new_balance' => $cashAccount->fresh()->current_balance]);
+
+                // Create transaction record
+                $transaction = BankTransaction::create([
+                    'user_id' => $request->user()->id,
+                    'organization_id' => $organizationId,
+                    'account_id' => $cashAccount->id,
+                    'transaction_type' => 'debit_note',
+                    'amount' => $amount,
+                    'transaction_date' => $validated['debit_note_date'],
+                    'description' => $description,
+                ]);
+
+                \Log::info('Transaction created', ['transaction_id' => $transaction->id]);
+            } else {
+                // For non-cash payments, update the specified bank account
+                \Log::info('Processing bank payment', ['bank_account_id' => $validated['bank_account_id'] ?? null]);
+
+                if (isset($validated['bank_account_id']) && $validated['bank_account_id']) {
+                    $bankAccount = BankAccount::where('id', $validated['bank_account_id'])
+                        ->where('organization_id', $organizationId)
+                        ->first();
+
+                    if ($bankAccount) {
+                        \Log::info('Bank account found', ['account_id' => $bankAccount->id, 'current_balance' => $bankAccount->current_balance]);
+
+                        // DECREASE bank balance (payment made to supplier)
+                        $bankAccount->decrement('current_balance', $amount);
+
+                        \Log::info('Bank balance updated', ['new_balance' => $bankAccount->fresh()->current_balance]);
+
+                        // Create transaction record
+                        $transaction = BankTransaction::create([
+                            'user_id' => $request->user()->id,
+                            'organization_id' => $organizationId,
+                            'account_id' => $bankAccount->id,
+                            'transaction_type' => 'debit_note',
+                            'amount' => $amount,
+                            'transaction_date' => $validated['debit_note_date'],
+                            'description' => $description,
+                        ]);
+
+                        \Log::info('Bank transaction created', ['transaction_id' => $transaction->id]);
+                    } else {
+                        \Log::warning('Bank account not found', ['bank_account_id' => $validated['bank_account_id']]);
+                    }
+                } else {
+                    \Log::warning('No bank account ID provided for non-cash payment');
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::error('Error processing debit note payment', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            throw $e;
+        }
     }
 }

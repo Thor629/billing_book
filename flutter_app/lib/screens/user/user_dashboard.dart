@@ -21,6 +21,7 @@ import 'expenses_screen.dart';
 import 'delivery_challan_screen.dart';
 import 'payment_out_screen.dart';
 import 'purchase_return_screen.dart';
+import 'debit_note_screen.dart';
 
 class UserDashboard extends StatefulWidget {
   const UserDashboard({super.key});
@@ -434,7 +435,7 @@ class _UserDashboardState extends State<UserDashboard> {
       case 16:
         return const PurchaseReturnScreen();
       case 17:
-        return _buildPlaceholderScreen('Debit Note');
+        return const DebitNoteScreen();
       case 18:
         return _buildPlaceholderScreen('Purchase Orders');
       // Accounting Solutions

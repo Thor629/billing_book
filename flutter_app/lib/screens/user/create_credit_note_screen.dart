@@ -811,6 +811,18 @@ class _CreateCreditNoteScreenState extends State<CreateCreditNoteScreen> {
       return;
     }
 
+    // Validate bank account for non-cash payments
+    final amountReceived = double.tryParse(_amountReceivedController.text) ?? 0;
+    if (amountReceived > 0 &&
+        _paymentMode != 'Cash' &&
+        _selectedBankAccountId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Please select a bank account for non-cash payment')),
+      );
+      return;
+    }
+
     setState(() => _isSaving = true);
 
     try {
