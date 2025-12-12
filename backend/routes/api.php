@@ -210,6 +210,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/{id}', [App\Http\Controllers\DeliveryChallanController::class, 'destroy']);
     });
     
+    // GST Report routes
+    Route::prefix('gst-reports')->group(function () {
+        Route::get('/summary', [App\Http\Controllers\GstReportController::class, 'getGstSummary']);
+        Route::get('/by-rate', [App\Http\Controllers\GstReportController::class, 'getGstByRate']);
+        Route::get('/transactions', [App\Http\Controllers\GstReportController::class, 'getGstTransactions']);
+    });
+    
     // User profile routes
     Route::prefix('user')->group(function () {
         Route::get('/profile', [App\Http\Controllers\ProfileController::class, 'show']);

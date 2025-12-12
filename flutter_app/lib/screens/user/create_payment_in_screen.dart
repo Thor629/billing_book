@@ -206,7 +206,7 @@ class _CreatePaymentInScreenState extends State<CreatePaymentInScreen> {
                             ElevatedButton(
                               onPressed: _showPartySelectionDialog,
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.purple[700],
+                                backgroundColor: Colors.black,
                                 foregroundColor: Colors.white,
                               ),
                               child: const Text('Select Party'),

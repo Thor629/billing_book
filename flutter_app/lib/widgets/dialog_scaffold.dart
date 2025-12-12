@@ -34,7 +34,7 @@ class DialogScaffold extends StatelessWidget {
         width: width ?? MediaQuery.of(context).size.width * 0.9,
         height: height ?? MediaQuery.of(context).size.height * 0.9,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: const Color(0xFFFFF8F0), // Warm peach background
           borderRadius: BorderRadius.circular(16),
         ),
         child: Column(

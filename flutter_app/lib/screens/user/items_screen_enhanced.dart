@@ -407,7 +407,7 @@ class _ItemsScreenEnhancedState extends State<ItemsScreenEnhanced> {
 
                   return Container(
                     decoration: BoxDecoration(
-                      color: AppColors.cardBackground,
+                      color: const Color(0xFFFFF8F0), // Warm peach background
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
@@ -433,6 +433,20 @@ class _ItemsScreenEnhancedState extends State<ItemsScreenEnhanced> {
                               dataRowMaxHeight: 72,
                               headingRowColor: WidgetStateProperty.all(
                                   AppColors.tableHeader),
+                              dataRowColor:
+                                  WidgetStateProperty.resolveWith<Color?>(
+                                (Set<WidgetState> states) {
+                                  if (states.contains(WidgetState.selected)) {
+                                    return AppColors.warningLight;
+                                  }
+                                  if (states.contains(WidgetState.hovered)) {
+                                    return AppColors.warningLight
+                                        .withOpacity(0.5);
+                                  }
+                                  return const Color(
+                                      0xFFFFF8F0); // Warm peach background
+                                },
+                              ),
                               decoration: BoxDecoration(
                                 border: Border.all(
                                     color: AppColors.borderLight, width: 1),

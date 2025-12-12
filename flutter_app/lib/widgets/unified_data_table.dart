@@ -28,7 +28,7 @@ class UnifiedDataTable extends StatelessWidget {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: AppColors.cardBackground,
+        color: const Color(0xFFFFF8F0), // Warm peach background
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.border, width: 1),
         boxShadow: [
@@ -64,7 +64,7 @@ class UnifiedDataTable extends StatelessWidget {
                     if (states.contains(WidgetState.hovered)) {
                       return AppColors.warningLight.withOpacity(0.5);
                     }
-                    return AppColors.cardBackground;
+                    return const Color(0xFFFFF8F0); // Warm peach background
                   },
                 ),
                 dividerThickness: 1,

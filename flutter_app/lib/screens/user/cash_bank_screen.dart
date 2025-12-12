@@ -162,21 +162,31 @@ class _CashBankScreenState extends State<CashBankScreen> {
               Text('Cash and Bank', style: AppTextStyles.h1),
               Row(
                 children: [
-                  OutlinedButton.icon(
+                  ElevatedButton.icon(
                     onPressed: () => _showAddReduceMoneyDialog(),
                     icon: const Icon(Icons.add_circle_outline, size: 18),
                     label: const Text('Add/Reduce Money'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.primaryDark,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.black,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
-                  OutlinedButton.icon(
+                  ElevatedButton.icon(
                     onPressed: () => _showTransferMoneyDialog(),
                     icon: const Icon(Icons.swap_horiz, size: 18),
                     label: const Text('Transfer Money'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.primaryDark,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.black,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -206,7 +216,7 @@ class _CashBankScreenState extends State<CashBankScreen> {
                   Container(
                     width: 300,
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: const Color(0xFFFFF8F0), // Warm peach background
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(color: Colors.grey.shade300),
                     ),
@@ -401,7 +411,7 @@ class _CashBankScreenState extends State<CashBankScreen> {
                   Expanded(
                     child: Container(
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: const Color(0xFFFFF8F0), // Warm peach background
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: Colors.grey.shade300),
                       ),
@@ -454,11 +464,8 @@ class _CashBankScreenState extends State<CashBankScreen> {
                           Container(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 16, vertical: 12),
-                            decoration: BoxDecoration(
-                              color: Colors.grey.shade50,
-                              border: Border(
-                                bottom: BorderSide(color: Colors.grey.shade300),
-                              ),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFFF9800), // Orange background
                             ),
                             child: Row(
                               children: [
@@ -469,7 +476,7 @@ class _CashBankScreenState extends State<CashBankScreen> {
                                     'Description',
                                     style: AppTextStyles.bodySmall.copyWith(
                                       fontWeight: FontWeight.bold,
-                                      color: AppColors.textSecondary,
+                                      color: Colors.white,
                                     ),
                                   ),
                                 ),
@@ -479,7 +486,7 @@ class _CashBankScreenState extends State<CashBankScreen> {
                                     'Account',
                                     style: AppTextStyles.bodySmall.copyWith(
                                       fontWeight: FontWeight.bold,
-                                      color: AppColors.textSecondary,
+                                      color: Colors.white,
                                     ),
                                   ),
                                 ),
@@ -489,7 +496,7 @@ class _CashBankScreenState extends State<CashBankScreen> {
                                     'Type',
                                     style: AppTextStyles.bodySmall.copyWith(
                                       fontWeight: FontWeight.bold,
-                                      color: AppColors.textSecondary,
+                                      color: Colors.white,
                                     ),
                                   ),
                                 ),
@@ -499,7 +506,7 @@ class _CashBankScreenState extends State<CashBankScreen> {
                                     'Date',
                                     style: AppTextStyles.bodySmall.copyWith(
                                       fontWeight: FontWeight.bold,
-                                      color: AppColors.textSecondary,
+                                      color: Colors.white,
                                     ),
                                   ),
                                 ),
@@ -509,7 +516,7 @@ class _CashBankScreenState extends State<CashBankScreen> {
                                     'Amount',
                                     style: AppTextStyles.bodySmall.copyWith(
                                       fontWeight: FontWeight.bold,
-                                      color: AppColors.textSecondary,
+                                      color: Colors.white,
                                     ),
                                     textAlign: TextAlign.right,
                                   ),
