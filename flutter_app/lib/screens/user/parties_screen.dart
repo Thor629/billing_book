@@ -5,6 +5,7 @@ import '../../core/constants/app_text_styles.dart';
 import '../../providers/party_provider.dart';
 import '../../providers/organization_provider.dart';
 import '../../models/party_model.dart';
+import '../../widgets/unified_data_table.dart';
 
 class PartiesScreen extends StatefulWidget {
   const PartiesScreen({super.key});
@@ -172,97 +173,38 @@ class _PartiesScreenState extends State<PartiesScreen> {
                   );
                 }
 
-                return Card(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: DataTable(
-                      columns: const [
-                        DataColumn(label: Text('Name')),
-                        DataColumn(label: Text('Type')),
-                        DataColumn(label: Text('Contact Person')),
-                        DataColumn(label: Text('Phone')),
-                        DataColumn(label: Text('Email')),
-                        DataColumn(label: Text('GST No')),
-                        DataColumn(label: Text('Status')),
-                        DataColumn(label: Text('Actions')),
-                      ],
-                      rows: partyProvider.parties.map((party) {
-                        return DataRow(cells: [
-                          DataCell(Text(party.name)),
-                          DataCell(
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: party.partyType == 'customer'
-                                    ? AppColors.success.withOpacity(0.1)
-                                    : party.partyType == 'vendor'
-                                        ? AppColors.info.withOpacity(0.1)
-                                        : AppColors.warning.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                party.partyTypeLabel,
-                                style: TextStyle(
-                                  color: party.partyType == 'customer'
-                                      ? AppColors.success
-                                      : party.partyType == 'vendor'
-                                          ? AppColors.info
-                                          : AppColors.warning,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
-                          ),
-                          DataCell(Text(party.contactPerson ?? '-')),
-                          DataCell(Text(party.phone)),
-                          DataCell(Text(party.email ?? '-')),
-                          DataCell(Text(party.gstNo ?? '-')),
-                          DataCell(
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: party.isActive
-                                    ? AppColors.success.withOpacity(0.1)
-                                    : AppColors.textSecondary.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                party.isActive ? 'Active' : 'Inactive',
-                                style: TextStyle(
-                                  color: party.isActive
-                                      ? AppColors.success
-                                      : AppColors.textSecondary,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
-                          ),
-                          DataCell(
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon:
-                                      const Icon(Icons.edit_outlined, size: 20),
-                                  onPressed: () =>
-                                      _showPartyDialog(party: party),
-                                  tooltip: 'Edit',
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete_outline,
-                                      size: 20, color: AppColors.warning),
-                                  onPressed: () => _deleteParty(party),
-                                  tooltip: 'Delete',
-                                ),
-                              ],
-                            ),
-                          ),
-                        ]);
-                      }).toList(),
-                    ),
-                  ),
+                return UnifiedDataTable(
+                  columns: const [
+                    DataColumn(label: TableHeader('Name')),
+                    DataColumn(label: TableHeader('Type')),
+                    DataColumn(label: TableHeader('Contact Person')),
+                    DataColumn(label: TableHeader('Phone')),
+                    DataColumn(label: TableHeader('Email')),
+                    DataColumn(label: TableHeader('GST No')),
+                    DataColumn(label: TableHeader('Status')),
+                    DataColumn(label: TableHeader('Actions')),
+                  ],
+                  rows: partyProvider.parties.map((party) {
+                    return DataRow(cells: [
+                      DataCell(TableCellText(party.name)),
+                      DataCell(TableStatusBadge(party.partyTypeLabel)),
+                      DataCell(TableCellText(party.contactPerson ?? '-')),
+                      DataCell(TableCellText(party.phone)),
+                      DataCell(TableCellText(party.email ?? '-')),
+                      DataCell(TableCellText(party.gstNo ?? '-')),
+                      DataCell(
+                        TableStatusBadge(
+                          party.isActive ? 'Active' : 'Inactive',
+                        ),
+                      ),
+                      DataCell(
+                        TableActionButtons(
+                          onEdit: () => _showPartyDialog(party: party),
+                          onDelete: () => _deleteParty(party),
+                        ),
+                      ),
+                    ]);
+                  }).toList(),
                 );
               },
             ),

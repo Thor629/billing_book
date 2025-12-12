@@ -178,6 +178,129 @@ class ExpenseController extends Controller
         return response()->json($expense);
     }
 
+    public function update(Request $request, $id)
+    {
+        $expense = Expense::findOrFail($id);
+
+        $validated = $request->validate([
+            'expense_number' => 'sometimes|string',
+            'expense_date' => 'sometimes|date',
+            'category' => 'sometimes|string',
+            'party_id' => 'sometimes|exists:parties,id',
+            'payment_mode' => 'sometimes|string',
+            'total_amount' => 'sometimes|numeric|min:0',
+            'bank_account_id' => 'nullable|exists:bank_accounts,id',
+            'notes' => 'nullable|string',
+            'items' => 'sometimes|array',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            $oldAmount = $expense->total_amount;
+            $oldPaymentMode = $expense->payment_mode;
+            $organizationId = $expense->organization_id;
+
+            // Find and reverse old bank transaction
+            $oldTransaction = BankTransaction::where('description', 'like', "%Expense: {$expense->expense_number}%")
+                ->where('organization_id', $organizationId)
+                ->first();
+
+            if ($oldTransaction) {
+                $oldAccount = BankAccount::find($oldTransaction->account_id);
+                if ($oldAccount) {
+                    // Reverse old transaction (add back the old amount since it was deducted)
+                    $oldAccount->increment('current_balance', $oldAmount);
+                }
+                $oldTransaction->delete();
+            }
+
+            // Update expense
+            $expense->update($validated);
+
+            // Update items if provided
+            if (isset($validated['items'])) {
+                $expense->items()->delete();
+                
+                foreach ($validated['items'] as $item) {
+                    $expense->items()->create($item);
+                }
+            }
+
+            // Create new bank transaction with updated values
+            $newAmount = $request->has('total_amount') ? $request->total_amount : $oldAmount;
+            $newPaymentMode = $request->has('payment_mode') ? $request->payment_mode : $oldPaymentMode;
+            
+            $description = "Expense: {$expense->expense_number} - {$expense->category}";
+            if ($expense->notes) {
+                $description .= " ({$expense->notes})";
+            }
+
+            if ($newPaymentMode === 'Cash') {
+                $cashAccount = BankAccount::firstOrCreate(
+                    [
+                        'organization_id' => $organizationId,
+                        'account_name' => 'Cash in Hand',
+                        'account_type' => 'cash',
+                    ],
+                    [
+                        'user_id' => $request->user()->id,
+                        'opening_balance' => 0,
+                        'current_balance' => 0,
+                        'as_of_date' => now(),
+                    ]
+                );
+
+                $cashAccount->decrement('current_balance', $newAmount);
+
+                BankTransaction::create([
+                    'user_id' => $request->user()->id,
+                    'organization_id' => $organizationId,
+                    'account_id' => $cashAccount->id,
+                    'transaction_type' => 'expense',
+                    'amount' => $newAmount,
+                    'transaction_date' => $expense->expense_date,
+                    'description' => $description,
+                ]);
+            } else {
+                $bankAccountId = $request->has('bank_account_id') ? $request->bank_account_id : $expense->bank_account_id;
+                
+                if ($bankAccountId) {
+                    $bankAccount = BankAccount::where('id', $bankAccountId)
+                        ->where('organization_id', $organizationId)
+                        ->first();
+
+                    if ($bankAccount) {
+                        $bankAccount->decrement('current_balance', $newAmount);
+
+                        BankTransaction::create([
+                            'user_id' => $request->user()->id,
+                            'organization_id' => $organizationId,
+                            'account_id' => $bankAccount->id,
+                            'transaction_type' => 'expense',
+                            'amount' => $newAmount,
+                            'transaction_date' => $expense->expense_date,
+                            'description' => $description,
+                        ]);
+                    }
+                }
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Expense updated successfully with bank balance adjustment',
+                'expense' => $expense->load(['party', 'items', 'bankAccount']),
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'message' => 'Failed to update expense',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
     public function destroy($id)
     {
         try {

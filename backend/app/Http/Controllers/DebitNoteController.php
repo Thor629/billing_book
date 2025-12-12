@@ -102,6 +102,126 @@ class DebitNoteController extends Controller
         return response()->json($debitNote);
     }
 
+    public function update(Request $request, $id)
+    {
+        $debitNote = DebitNote::where('organization_id', $request->header('X-Organization-Id'))
+            ->findOrFail($id);
+
+        $validated = $request->validate([
+            'party_id' => 'sometimes|exists:parties,id',
+            'debit_note_date' => 'sometimes|date',
+            'amount_paid' => 'nullable|numeric|min:0',
+            'payment_mode' => 'nullable|string|max:50',
+            'bank_account_id' => 'nullable|exists:bank_accounts,id',
+            'status' => 'sometimes|in:draft,issued,cancelled',
+            'reason' => 'nullable|string',
+            'notes' => 'nullable|string',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            $oldAmountPaid = $debitNote->amount_paid;
+            $organizationId = $debitNote->organization_id;
+
+            // If amount paid is being updated
+            if ($request->has('amount_paid')) {
+                $newAmountPaid = $request->amount_paid;
+
+                // Find and reverse old bank transaction
+                if ($oldAmountPaid > 0) {
+                    $oldTransaction = BankTransaction::where('description', 'like', "%Debit Note Payment: {$debitNote->debit_note_number}%")
+                        ->where('organization_id', $organizationId)
+                        ->first();
+
+                    if ($oldTransaction) {
+                        $oldAccount = BankAccount::find($oldTransaction->account_id);
+                        if ($oldAccount) {
+                            // Reverse old transaction (add back the old amount since it was deducted)
+                            $oldAccount->increment('current_balance', $oldAmountPaid);
+                        }
+                        $oldTransaction->delete();
+                    }
+                }
+
+                // Create new bank transaction if amount paid
+                if ($newAmountPaid > 0) {
+                    $paymentMode = $request->has('payment_mode') ? strtolower($request->payment_mode) : strtolower($debitNote->payment_mode ?? 'cash');
+                    $description = "Debit Note Payment: {$debitNote->debit_note_number}";
+                    
+                    if ($request->notes) {
+                        $description .= " - {$request->notes}";
+                    }
+
+                    if ($paymentMode === 'cash') {
+                        $cashAccount = BankAccount::firstOrCreate(
+                            [
+                                'organization_id' => $organizationId,
+                                'account_name' => 'Cash in Hand',
+                                'account_type' => 'cash',
+                            ],
+                            [
+                                'user_id' => $request->user()->id,
+                                'opening_balance' => 0,
+                                'current_balance' => 0,
+                                'as_of_date' => now(),
+                            ]
+                        );
+
+                        $cashAccount->decrement('current_balance', $newAmountPaid);
+
+                        BankTransaction::create([
+                            'user_id' => $request->user()->id,
+                            'organization_id' => $organizationId,
+                            'account_id' => $cashAccount->id,
+                            'transaction_type' => 'debit_note',
+                            'amount' => $newAmountPaid,
+                            'transaction_date' => $debitNote->debit_note_date,
+                            'description' => $description,
+                        ]);
+                    } else {
+                        $bankAccountId = $request->has('bank_account_id') ? $request->bank_account_id : $debitNote->bank_account_id;
+                        
+                        if ($bankAccountId) {
+                            $bankAccount = BankAccount::where('id', $bankAccountId)
+                                ->where('organization_id', $organizationId)
+                                ->first();
+
+                            if ($bankAccount) {
+                                $bankAccount->decrement('current_balance', $newAmountPaid);
+
+                                BankTransaction::create([
+                                    'user_id' => $request->user()->id,
+                                    'organization_id' => $organizationId,
+                                    'account_id' => $bankAccount->id,
+                                    'transaction_type' => 'debit_note',
+                                    'amount' => $newAmountPaid,
+                                    'transaction_date' => $debitNote->debit_note_date,
+                                    'description' => $description,
+                                ]);
+                            }
+                        }
+                    }
+                }
+            }
+
+            $debitNote->update($validated);
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Debit note updated successfully with bank balance adjustment',
+                'debit_note' => $debitNote->load(['party', 'items.item'])
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'message' => 'Failed to update debit note',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
     public function destroy($id, Request $request)
     {
         $debitNote = DebitNote::where('organization_id', $request->header('X-Organization-Id'))

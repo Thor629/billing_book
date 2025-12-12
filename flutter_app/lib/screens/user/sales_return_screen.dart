@@ -5,6 +5,7 @@ import '../../core/constants/app_text_styles.dart';
 import '../../models/sales_return_model.dart';
 import '../../services/sales_return_service.dart';
 import '../../providers/organization_provider.dart';
+import '../../widgets/unified_data_table.dart';
 import 'create_sales_return_screen.dart';
 
 class SalesReturnScreen extends StatefulWidget {
@@ -73,6 +74,88 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
     }
   }
 
+  void _viewReturn(SalesReturn salesReturn) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Sales Return ${salesReturn.returnNumber}'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildDetailRow('Customer', salesReturn.partyName ?? 'N/A'),
+              _buildDetailRow(
+                'Date',
+                '${salesReturn.returnDate.day.toString().padLeft(2, '0')} ${_getMonthName(salesReturn.returnDate.month)} ${salesReturn.returnDate.year}',
+              ),
+              _buildDetailRow(
+                'Amount',
+                '₹${salesReturn.totalAmount.toStringAsFixed(2)}',
+              ),
+              _buildDetailRow(
+                'Amount Paid',
+                '₹${salesReturn.amountPaid.toStringAsFixed(2)}',
+              ),
+              _buildDetailRow('Payment Mode', salesReturn.paymentMode ?? 'N/A'),
+              _buildDetailRow('Status', salesReturn.status),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              '$label:',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+          Expanded(child: Text(value)),
+        ],
+      ),
+    );
+  }
+
+  void _editReturn(SalesReturn salesReturn) async {
+    final result = await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => CreateSalesReturnScreen(
+        returnId: salesReturn.id,
+        returnData: {
+          'return_number': salesReturn.returnNumber,
+          'party_id': salesReturn.partyId,
+          'party_name': salesReturn.partyName,
+          'invoice_number': salesReturn.invoiceNumber,
+          'return_date': salesReturn.returnDate.toIso8601String(),
+          'total_amount': salesReturn.totalAmount,
+          'amount_paid': salesReturn.amountPaid,
+          'payment_mode': salesReturn.paymentMode,
+          'status': salesReturn.status,
+        },
+      ),
+    );
+
+    if (result == true) {
+      _loadReturns();
+    }
+  }
+
   void _showDeleteDialog(SalesReturn salesReturn) {
     showDialog(
       context: context,
@@ -122,18 +205,17 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
               Text('Sales Return', style: AppTextStyles.h1),
               ElevatedButton(
                 onPressed: () async {
-                  final result = await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const CreateSalesReturnScreen(),
-                    ),
+                  final result = await showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (context) => const CreateSalesReturnScreen(),
                   );
                   if (result == true) {
                     _loadReturns();
                   }
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.purple[700],
+                  backgroundColor: Colors.black,
                   foregroundColor: Colors.white,
                   padding:
                       const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -182,63 +264,41 @@ class _SalesReturnScreenState extends State<SalesReturnScreen> {
                 ? const Center(child: CircularProgressIndicator())
                 : _returns.isEmpty
                     ? const Center(child: Text('No sales returns found'))
-                    : Card(
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: DataTable(
-                            columns: const [
-                              DataColumn(label: Text('Date')),
-                              DataColumn(label: Text('Sales Return Number')),
-                              DataColumn(label: Text('Party Name')),
-                              DataColumn(label: Text('Invoice No')),
-                              DataColumn(label: Text('Amount')),
-                              DataColumn(label: Text('Status')),
-                              DataColumn(label: Text('Actions')),
-                            ],
-                            rows: _returns.map((salesReturn) {
-                              return DataRow(cells: [
-                                DataCell(Text(
-                                    '${salesReturn.returnDate.day.toString().padLeft(2, '0')} ${_getMonthName(salesReturn.returnDate.month)} ${salesReturn.returnDate.year}')),
-                                DataCell(Text(salesReturn.returnNumber)),
-                                DataCell(Text(salesReturn.partyName ?? '-')),
-                                DataCell(
-                                    Text(salesReturn.invoiceNumber ?? '-')),
-                                DataCell(Text(
-                                    '₹ ${salesReturn.totalAmount.toStringAsFixed(2)}')),
-                                DataCell(
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: salesReturn.status == 'refunded'
-                                          ? Colors.blue[50]
-                                          : Colors.red[50],
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      salesReturn.status == 'refunded'
-                                          ? 'Refunded'
-                                          : 'Unpaid',
-                                      style: TextStyle(
-                                        color: salesReturn.status == 'refunded'
-                                            ? Colors.blue[700]
-                                            : Colors.red[700],
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                DataCell(
-                                  IconButton(
-                                    icon: const Icon(Icons.more_vert),
-                                    onPressed: () =>
-                                        _showDeleteDialog(salesReturn),
-                                  ),
-                                ),
-                              ]);
-                            }).toList(),
-                          ),
-                        ),
+                    : UnifiedDataTable(
+                        columns: const [
+                          DataColumn(label: TableHeader('Date')),
+                          DataColumn(label: TableHeader('Sales Return Number')),
+                          DataColumn(label: TableHeader('Party Name')),
+                          DataColumn(label: TableHeader('Invoice No')),
+                          DataColumn(label: TableHeader('Amount')),
+                          DataColumn(label: TableHeader('Status')),
+                          DataColumn(label: TableHeader('Actions')),
+                        ],
+                        rows: _returns.map((salesReturn) {
+                          return DataRow(cells: [
+                            DataCell(TableCellText(
+                                '${salesReturn.returnDate.day.toString().padLeft(2, '0')} ${_getMonthName(salesReturn.returnDate.month)} ${salesReturn.returnDate.year}')),
+                            DataCell(TableCellText(salesReturn.returnNumber)),
+                            DataCell(
+                                TableCellText(salesReturn.partyName ?? '-')),
+                            DataCell(TableCellText(
+                                salesReturn.invoiceNumber ?? '-')),
+                            DataCell(TableCellText(
+                                '₹ ${salesReturn.totalAmount.toStringAsFixed(2)}')),
+                            DataCell(TableStatusBadge(
+                              salesReturn.status == 'refunded'
+                                  ? 'Refunded'
+                                  : 'Unpaid',
+                            )),
+                            DataCell(
+                              TableActionButtons(
+                                onView: () => _viewReturn(salesReturn),
+                                onEdit: () => _editReturn(salesReturn),
+                                onDelete: () => _showDeleteDialog(salesReturn),
+                              ),
+                            ),
+                          ]);
+                        }).toList(),
                       ),
           ),
         ],

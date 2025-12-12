@@ -341,6 +341,7 @@ class SalesInvoiceController extends Controller
             'amount_received' => 'sometimes|numeric|min:0',
             'payment_mode' => 'sometimes|string',
             'payment_status' => 'sometimes|in:paid,unpaid,partial',
+            'bank_account_id' => 'nullable|exists:bank_accounts,id',
         ]);
 
         if ($validator->fails()) {
@@ -349,6 +350,9 @@ class SalesInvoiceController extends Controller
 
         try {
             DB::beginTransaction();
+
+            $oldAmountReceived = $invoice->amount_received;
+            $organizationId = $invoice->organization_id;
 
             // Update payment if amount_received is provided
             if ($request->has('amount_received')) {
@@ -361,6 +365,61 @@ class SalesInvoiceController extends Controller
                     $balanceAmount = 0;
                 } elseif ($amountReceived > 0) {
                     $paymentStatus = 'partial';
+                }
+
+                // Find and reverse old bank transaction if exists
+                if ($oldAmountReceived > 0) {
+                    $oldTransaction = \App\Models\BankTransaction::where('description', 'like', '%' . $invoice->invoice_prefix . $invoice->invoice_number . '%')
+                        ->where('organization_id', $organizationId)
+                        ->where('transaction_type', 'add')
+                        ->first();
+
+                    if ($oldTransaction) {
+                        $oldAccount = \App\Models\BankAccount::find($oldTransaction->account_id);
+                        if ($oldAccount) {
+                            // Reverse old transaction (subtract the old amount)
+                            $oldAccount->decrement('current_balance', $oldAmountReceived);
+                        }
+                        $oldTransaction->delete();
+                    }
+                }
+
+                // Create new bank transaction if amount received
+                if ($amountReceived > 0) {
+                    $accountId = $request->bank_account_id;
+                    
+                    if (!$accountId) {
+                        $cashAccount = \App\Models\BankAccount::firstOrCreate(
+                            [
+                                'organization_id' => $organizationId,
+                                'account_name' => 'Cash',
+                                'account_type' => 'cash',
+                            ],
+                            [
+                                'user_id' => $request->user()->id,
+                                'current_balance' => 0,
+                                'opening_balance' => 0,
+                                'opening_balance_date' => now(),
+                                'is_default' => false,
+                            ]
+                        );
+                        $accountId = $cashAccount->id;
+                    }
+
+                    \App\Models\BankTransaction::create([
+                        'account_id' => $accountId,
+                        'organization_id' => $organizationId,
+                        'user_id' => $request->user()->id,
+                        'transaction_type' => 'add',
+                        'amount' => $amountReceived,
+                        'transaction_date' => $invoice->invoice_date,
+                        'description' => 'Payment received for Sales Invoice ' . $invoice->invoice_prefix . $invoice->invoice_number . ' - ' . ($request->payment_mode ?? 'Cash'),
+                    ]);
+
+                    $bankAccount = \App\Models\BankAccount::find($accountId);
+                    if ($bankAccount) {
+                        $bankAccount->increment('current_balance', $amountReceived);
+                    }
                 }
 
                 $invoice->update([
@@ -385,7 +444,7 @@ class SalesInvoiceController extends Controller
             DB::commit();
 
             return response()->json([
-                'message' => 'Sales invoice updated successfully',
+                'message' => 'Sales invoice updated successfully with bank balance adjustment',
                 'invoice' => $invoice->load(['party', 'items', 'organization']),
             ]);
 

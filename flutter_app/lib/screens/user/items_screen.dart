@@ -397,93 +397,102 @@ class _ItemsScreenState extends State<ItemsScreen> {
                 }
 
                 return Card(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: DataTable(
-                      columns: const [
-                        DataColumn(label: Text('Name')),
-                        DataColumn(label: Text('Code')),
-                        DataColumn(label: Text('Category')),
-                        DataColumn(label: Text('Unit')),
-                        DataColumn(label: Text('Selling Price')),
-                        DataColumn(label: Text('Purchase Price')),
-                        DataColumn(label: Text('Stock')),
-                        DataColumn(label: Text('Actions')),
-                      ],
-                      rows: itemProvider.items.map((item) {
-                        return DataRow(
-                          cells: [
-                            DataCell(
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(item.itemName,
-                                      style: AppTextStyles.bodyMedium),
-                                  if (item.description != null &&
-                                      item.description!.isNotEmpty)
-                                    Text(
-                                      item.description!,
-                                      style: AppTextStyles.bodySmall.copyWith(
-                                        color: AppColors.textSecondary,
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.vertical,
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: DataTable(
+                          columns: const [
+                            DataColumn(label: Text('Name')),
+                            DataColumn(label: Text('Code')),
+                            DataColumn(label: Text('Category')),
+                            DataColumn(label: Text('Unit')),
+                            DataColumn(label: Text('Selling Price')),
+                            DataColumn(label: Text('Purchase Price')),
+                            DataColumn(label: Text('Stock')),
+                            DataColumn(label: Text('Actions')),
+                          ],
+                          rows: itemProvider.items.map((item) {
+                            return DataRow(
+                              cells: [
+                                DataCell(
+                                  Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(item.itemName,
+                                          style: AppTextStyles.bodyMedium),
+                                      if (item.description != null &&
+                                          item.description!.isNotEmpty)
+                                        Text(
+                                          item.description!,
+                                          style:
+                                              AppTextStyles.bodySmall.copyWith(
+                                            color: AppColors.textSecondary,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                DataCell(Text(item.itemCode)),
+                                DataCell(Text(item.category ?? '-')),
+                                DataCell(Text(item.unit)),
+                                DataCell(Text(
+                                    '\$${item.sellingPrice.toStringAsFixed(2)}')),
+                                DataCell(Text(
+                                    '\$${item.purchasePrice.toStringAsFixed(2)}')),
+                                DataCell(
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: item.isLowStock
+                                          ? AppColors.warning
+                                              .withValues(alpha: 0.1)
+                                          : AppColors.success
+                                              .withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      '${item.stockQty}',
+                                      style: TextStyle(
+                                        color: item.isLowStock
+                                            ? AppColors.warning
+                                            : AppColors.success,
+                                        fontWeight: FontWeight.bold,
                                       ),
                                     ),
-                                ],
-                              ),
-                            ),
-                            DataCell(Text(item.itemCode)),
-                            DataCell(Text(item.category ?? '-')),
-                            DataCell(Text(item.unit)),
-                            DataCell(Text(
-                                '\$${item.sellingPrice.toStringAsFixed(2)}')),
-                            DataCell(Text(
-                                '\$${item.purchasePrice.toStringAsFixed(2)}')),
-                            DataCell(
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: item.isLowStock
-                                      ? AppColors.warning.withValues(alpha: 0.1)
-                                      : AppColors.success
-                                          .withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  '${item.stockQty}',
-                                  style: TextStyle(
-                                    color: item.isLowStock
-                                        ? AppColors.warning
-                                        : AppColors.success,
-                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
-                              ),
-                            ),
-                            DataCell(
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.edit_outlined),
-                                    onPressed: () =>
-                                        _showItemDialog(item: item),
-                                    tooltip: 'Edit',
+                                DataCell(
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.edit_outlined),
+                                        onPressed: () =>
+                                            _showItemDialog(item: item),
+                                        tooltip: 'Edit',
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline),
+                                        onPressed: () => _deleteItem(item),
+                                        tooltip: 'Delete',
+                                        color: AppColors.warning,
+                                      ),
+                                    ],
                                   ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete_outline),
-                                    onPressed: () => _deleteItem(item),
-                                    tooltip: 'Delete',
-                                    color: AppColors.warning,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        );
-                      }).toList(),
+                                ),
+                              ],
+                            );
+                          }).toList(),
+                        ),
+                      ),
                     ),
                   ),
                 );

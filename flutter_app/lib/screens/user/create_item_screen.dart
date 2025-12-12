@@ -5,6 +5,7 @@ import '../../core/constants/app_text_styles.dart';
 import '../../providers/item_provider.dart';
 import '../../providers/organization_provider.dart';
 import '../../models/item_model.dart';
+import '../../utils/barcode_generator.dart';
 
 class CreateItemScreen extends StatefulWidget {
   final ItemModel? item;
@@ -175,10 +176,14 @@ class _CreateItemScreenState extends State<CreateItemScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: Text(widget.item == null ? 'Create New Item' : 'Edit Item'),
-        backgroundColor: Colors.white,
+        title: Text(
+          widget.item == null ? 'Create New Item' : 'Edit Item',
+          style: const TextStyle(color: Colors.white),
+        ),
+        backgroundColor: const Color(0xFFFF9800),
         elevation: 0,
-        foregroundColor: AppColors.textPrimary,
+        foregroundColor: Colors.white,
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: Row(
         children: [
@@ -392,9 +397,20 @@ class _CreateItemScreenState extends State<CreateItemScreen> {
             const SizedBox(width: 12),
             ElevatedButton(
               onPressed: () {
-                // Generate random barcode
-                _itemCodeController.text =
-                    'ITM${DateTime.now().millisecondsSinceEpoch % 100000}';
+                // Generate barcode and item code
+                final barcode = BarcodeGenerator.generateEAN13();
+                final itemCode = BarcodeGenerator.generateItemCode();
+
+                _barcodeController.text = barcode;
+                _itemCodeController.text = itemCode;
+
+                // Show confirmation
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Generated Barcode: $barcode'),
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue[50],
@@ -610,7 +626,7 @@ class _CreateItemScreenState extends State<CreateItemScreen> {
             ),
             const SizedBox(width: 12),
             SizedBox(
-              width: 150,
+              width: 170,
               child: DropdownButtonFormField<bool>(
                 value: _sellingPriceWithTax,
                 decoration: InputDecoration(
@@ -645,7 +661,7 @@ class _CreateItemScreenState extends State<CreateItemScreen> {
             ),
             const SizedBox(width: 12),
             SizedBox(
-              width: 150,
+              width: 170,
               child: DropdownButtonFormField<bool>(
                 value: _purchasePriceWithTax,
                 decoration: InputDecoration(

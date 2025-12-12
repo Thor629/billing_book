@@ -5,9 +5,17 @@ import '../../services/payment_in_service.dart';
 import '../../services/party_service.dart';
 import '../../models/party_model.dart';
 import '../../providers/organization_provider.dart';
+import '../../widgets/dialog_scaffold.dart';
 
 class CreatePaymentInScreen extends StatefulWidget {
-  const CreatePaymentInScreen({super.key});
+  final int? paymentId;
+  final Map<String, dynamic>? paymentData;
+
+  const CreatePaymentInScreen({
+    super.key,
+    this.paymentId,
+    this.paymentData,
+  });
 
   @override
   State<CreatePaymentInScreen> createState() => _CreatePaymentInScreenState();
@@ -32,55 +40,64 @@ class _CreatePaymentInScreenState extends State<CreatePaymentInScreen> {
   List<PartyModel> _parties = [];
   List<dynamic> _bankAccounts = [];
 
+  bool get _isEditMode =>
+      widget.paymentId != null || widget.paymentData != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNextPaymentNumber();
+  }
+
+  Future<void> _loadNextPaymentNumber() async {
+    final orgProvider =
+        Provider.of<OrganizationProvider>(context, listen: false);
+
+    if (orgProvider.selectedOrganization != null) {
+      try {
+        final result = await _paymentService
+            .getNextPaymentNumber(orgProvider.selectedOrganization!.id);
+        setState(() {
+          _paymentNumberController.text = result['next_number'].toString();
+
+          // Load existing payment data if in edit mode
+          if (widget.paymentData != null) {
+            debugPrint('🔄 Loading payment data: ${widget.paymentData}');
+            _paymentNumberController.text =
+                widget.paymentData!['payment_number'] ??
+                    _paymentNumberController.text;
+            _selectedPartyId = widget.paymentData!['party_id'];
+            _selectedPartyName = widget.paymentData!['party_name'];
+            _amountController.text =
+                widget.paymentData!['amount']?.toString() ?? '';
+            // Normalize payment mode to match dropdown values
+            final mode = widget.paymentData!['payment_mode'] ?? 'cash';
+            _paymentMode =
+                mode[0].toUpperCase() + mode.substring(1).toLowerCase();
+            _notesController.text = widget.paymentData!['notes'] ?? '';
+            if (widget.paymentData!['payment_date'] != null) {
+              _paymentDate =
+                  DateTime.parse(widget.paymentData!['payment_date']);
+            }
+            debugPrint(
+                '✅ Loaded party: ID=$_selectedPartyId, Name=$_selectedPartyName');
+          }
+        });
+      } catch (e) {
+        debugPrint('Error loading next payment number: $e');
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Record Payment In #83',
-          style: TextStyle(color: Colors.black, fontSize: 18),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.qr_code_scanner, color: Colors.black),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.settings_outlined, color: Colors.black),
-            onPressed: () {},
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          const SizedBox(width: 8),
-          ElevatedButton(
-            onPressed: _isSaving ? null : _savePayment,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.purple[700],
-              foregroundColor: Colors.white,
-            ),
-            child: _isSaving
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
-                : const Text('Save'),
-          ),
-          const SizedBox(width: 16),
-        ],
-      ),
+    return DialogScaffold(
+      title: _isEditMode ? 'Edit Payment In' : 'Record Payment In',
+      onSave: _savePayment,
+      onSettings: () {
+        Navigator.pushNamed(context, '/settings');
+      },
+      isSaving: _isSaving,
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -631,15 +648,26 @@ class _CreatePaymentInScreenState extends State<CreatePaymentInScreen> {
           'bank_account_id': _selectedBankAccountId,
       };
 
-      await _paymentService.createPayment(paymentData);
-
-      if (mounted) {
-        Navigator.pop(context, true); // Return true to indicate success
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text(
-                  'Payment saved and account balance updated successfully')),
-        );
+      if (_isEditMode && widget.paymentId != null) {
+        // Update existing payment
+        await _paymentService.updatePaymentIn(widget.paymentId!, paymentData);
+        if (mounted) {
+          Navigator.pop(context, true);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Payment updated successfully')),
+          );
+        }
+      } else {
+        // Create new payment
+        await _paymentService.createPayment(paymentData);
+        if (mounted) {
+          Navigator.pop(context, true);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text(
+                    'Payment saved and account balance updated successfully')),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {

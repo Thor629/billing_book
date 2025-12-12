@@ -13,6 +13,7 @@ import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
 import 'screens/admin/admin_dashboard.dart';
 import 'screens/user/user_dashboard.dart';
+import 'screens/user/settings_screen.dart';
 import 'screens/organization/organization_selector_dialog.dart';
 
 void main() {
@@ -23,14 +24,88 @@ void main() {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // Safe text theme with fallback
-  static TextTheme _getSafeTextTheme(BuildContext context) {
+  // Modern text theme with Poppins (clean, modern font)
+  static TextTheme _getModernTextTheme() {
     try {
-      return GoogleFonts.interTextTheme(
-        Theme.of(context).textTheme,
+      return TextTheme(
+        displayLarge: GoogleFonts.poppins(
+          fontSize: 36,
+          fontWeight: FontWeight.w700,
+          letterSpacing: -0.5,
+          color: AppColors.textPrimary,
+        ),
+        displayMedium: GoogleFonts.poppins(
+          fontSize: 30,
+          fontWeight: FontWeight.w700,
+          letterSpacing: -0.3,
+          color: AppColors.textPrimary,
+        ),
+        headlineLarge: GoogleFonts.poppins(
+          fontSize: 28,
+          fontWeight: FontWeight.w700,
+          letterSpacing: -0.3,
+          color: AppColors.textPrimary,
+        ),
+        headlineMedium: GoogleFonts.poppins(
+          fontSize: 24,
+          fontWeight: FontWeight.w600,
+          letterSpacing: -0.2,
+          color: AppColors.textPrimary,
+        ),
+        headlineSmall: GoogleFonts.poppins(
+          fontSize: 20,
+          fontWeight: FontWeight.w600,
+          color: AppColors.textPrimary,
+        ),
+        titleLarge: GoogleFonts.poppins(
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+          color: AppColors.textPrimary,
+        ),
+        titleMedium: GoogleFonts.poppins(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          color: AppColors.textPrimary,
+        ),
+        titleSmall: GoogleFonts.poppins(
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          color: AppColors.textPrimary,
+        ),
+        bodyLarge: GoogleFonts.poppins(
+          fontSize: 16,
+          fontWeight: FontWeight.w400,
+          color: AppColors.textPrimary,
+        ),
+        bodyMedium: GoogleFonts.poppins(
+          fontSize: 14,
+          fontWeight: FontWeight.w400,
+          color: AppColors.textSecondary,
+        ),
+        bodySmall: GoogleFonts.poppins(
+          fontSize: 13,
+          fontWeight: FontWeight.w400,
+          color: AppColors.textSecondary,
+        ),
+        labelLarge: GoogleFonts.poppins(
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          color: AppColors.textPrimary,
+        ),
+        labelMedium: GoogleFonts.poppins(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: AppColors.textSecondary,
+        ),
+        labelSmall: GoogleFonts.poppins(
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+          color: AppColors.textTertiary,
+        ),
       );
     } catch (e) {
-      return Theme.of(context).textTheme;
+      // Fallback to default theme
+      return const TextTheme();
     }
   }
 
@@ -54,10 +129,118 @@ class MyApp extends StatelessWidget {
             debugShowCheckedModeBanner: false,
             theme: ThemeData(
               colorScheme: ColorScheme.fromSeed(
-                seedColor: AppColors.primaryDark,
+                seedColor: AppColors.warmPeach,
+                primary: AppColors.primary,
+                secondary: AppColors.warmOrange,
+                tertiary: AppColors.warmPink,
                 brightness: Brightness.light,
+                surface: AppColors.cardBackground,
+                onPrimary: AppColors.textLight,
+                onSecondary: AppColors.buttonTextDark,
               ),
-              textTheme: _getSafeTextTheme(context),
+              scaffoldBackgroundColor: AppColors.background,
+              cardTheme: CardThemeData(
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                color: AppColors.cardBackground,
+                shadowColor: AppColors.shadowWarm,
+              ),
+              elevatedButtonTheme: ElevatedButtonThemeData(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.warmPeach,
+                  foregroundColor: AppColors.buttonTextDark,
+                  elevation: 0,
+                  shadowColor: Colors.transparent,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+              outlinedButtonTheme: OutlinedButtonThemeData(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.textPrimary,
+                  side: const BorderSide(color: AppColors.border),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+              floatingActionButtonTheme: FloatingActionButtonThemeData(
+                backgroundColor: AppColors.warmOrange,
+                foregroundColor: AppColors.buttonTextDark,
+                elevation: 8,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+              inputDecorationTheme: InputDecorationTheme(
+                filled: true,
+                fillColor: AppColors.cardBackground,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 16,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: AppColors.border),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide:
+                      const BorderSide(color: AppColors.warmOrange, width: 2),
+                ),
+                errorBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: AppColors.error),
+                ),
+                hintStyle: TextStyle(
+                  color: AppColors.textTertiary,
+                  fontFamily: GoogleFonts.poppins().fontFamily,
+                ),
+                labelStyle: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontFamily: GoogleFonts.poppins().fontFamily,
+                ),
+              ),
+              appBarTheme: AppBarTheme(
+                backgroundColor: Colors.transparent,
+                foregroundColor: AppColors.textPrimary,
+                elevation: 0,
+                centerTitle: false,
+                titleTextStyle: GoogleFonts.poppins(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              chipTheme: ChipThemeData(
+                backgroundColor: AppColors.chipOrange,
+                labelStyle: GoogleFonts.poppins(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.textPrimary,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                side: BorderSide.none,
+              ),
+              dividerTheme: const DividerThemeData(
+                color: AppColors.divider,
+                thickness: 1,
+              ),
+              textTheme: _getModernTextTheme(),
+              fontFamily: GoogleFonts.poppins().fontFamily,
               useMaterial3: true,
             ),
             home: const AuthWrapper(),
@@ -66,6 +249,7 @@ class MyApp extends StatelessWidget {
               '/register': (context) => const RegisterScreen(),
               '/admin': (context) => const AdminDashboard(),
               '/user': (context) => const UserDashboard(),
+              '/settings': (context) => const SettingsScreen(),
             },
           );
         },

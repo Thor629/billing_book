@@ -288,50 +288,58 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   : _error != null
                       ? Center(child: Text(_error!))
                       : Card(
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: DataTable(
-                              columns: const [
-                                DataColumn(label: Text('Name')),
-                                DataColumn(label: Text('Email')),
-                                DataColumn(label: Text('Role')),
-                                DataColumn(label: Text('Status')),
-                                DataColumn(label: Text('Actions')),
-                              ],
-                              rows: _users.map((user) {
-                                return DataRow(cells: [
-                                  DataCell(Text(user.name)),
-                                  DataCell(Text(user.email)),
-                                  DataCell(Text(user.role.toUpperCase())),
-                                  DataCell(StatusBadge(status: user.status)),
-                                  DataCell(Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      IconButton(
-                                        icon: Icon(
-                                          user.status == 'active'
-                                              ? Icons.toggle_on
-                                              : Icons.toggle_off,
-                                          color: user.status == 'active'
-                                              ? AppColors.success
-                                              : AppColors.inactiveGray,
-                                        ),
-                                        onPressed: () =>
-                                            _toggleUserStatus(user),
-                                        tooltip: user.status == 'active'
-                                            ? 'Deactivate'
-                                            : 'Activate',
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(Icons.delete_outline,
-                                            color: AppColors.warning),
-                                        onPressed: () => _deleteUser(user),
-                                        tooltip: 'Delete',
-                                      ),
-                                    ],
-                                  )),
-                                ]);
-                              }).toList(),
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.vertical,
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: DataTable(
+                                  columns: const [
+                                    DataColumn(label: Text('Name')),
+                                    DataColumn(label: Text('Email')),
+                                    DataColumn(label: Text('Role')),
+                                    DataColumn(label: Text('Status')),
+                                    DataColumn(label: Text('Actions')),
+                                  ],
+                                  rows: _users.map((user) {
+                                    return DataRow(cells: [
+                                      DataCell(Text(user.name)),
+                                      DataCell(Text(user.email)),
+                                      DataCell(Text(user.role.toUpperCase())),
+                                      DataCell(
+                                          StatusBadge(status: user.status)),
+                                      DataCell(Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          IconButton(
+                                            icon: Icon(
+                                              user.status == 'active'
+                                                  ? Icons.toggle_on
+                                                  : Icons.toggle_off,
+                                              color: user.status == 'active'
+                                                  ? AppColors.success
+                                                  : AppColors.inactiveGray,
+                                            ),
+                                            onPressed: () =>
+                                                _toggleUserStatus(user),
+                                            tooltip: user.status == 'active'
+                                                ? 'Deactivate'
+                                                : 'Activate',
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(
+                                                Icons.delete_outline,
+                                                color: AppColors.warning),
+                                            onPressed: () => _deleteUser(user),
+                                            tooltip: 'Delete',
+                                          ),
+                                        ],
+                                      )),
+                                    ]);
+                                  }).toList(),
+                                ),
+                              ),
                             ),
                           ),
                         ),

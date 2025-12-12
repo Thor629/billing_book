@@ -10,6 +10,7 @@ import '../../services/bank_account_service.dart';
 import '../../services/purchase_invoice_service.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/organization_provider.dart';
+import '../../widgets/dialog_scaffold.dart';
 
 class PurchaseInvoiceItem {
   final ItemModel item;
@@ -35,7 +36,14 @@ class PurchaseInvoiceItem {
 }
 
 class CreatePurchaseInvoiceScreen extends StatefulWidget {
-  const CreatePurchaseInvoiceScreen({super.key});
+  final int? invoiceId;
+  final Map<String, dynamic>? invoiceData;
+
+  const CreatePurchaseInvoiceScreen({
+    super.key,
+    this.invoiceId,
+    this.invoiceData,
+  });
 
   @override
   State<CreatePurchaseInvoiceScreen> createState() =>
@@ -71,14 +79,37 @@ class _CreatePurchaseInvoiceScreenState
 
   bool _isLoading = false;
 
+  bool get _isEditMode =>
+      widget.invoiceId != null || widget.invoiceData != null;
+
   @override
   void initState() {
     super.initState();
+    _loadInitialData();
     _loadBankAccounts();
     _loadNextInvoiceNumber();
   }
 
+  Future<void> _loadInitialData() async {
+    // Load from widget data if in edit mode
+    if (widget.invoiceData != null) {
+      setState(() {
+        if (widget.invoiceData!['invoice_number'] != null) {
+          _invoiceNumberController.text =
+              widget.invoiceData!['invoice_number'].toString();
+        }
+        if (widget.invoiceData!['invoice_date'] != null) {
+          _invoiceDate = DateTime.parse(widget.invoiceData!['invoice_date']);
+        }
+        if (widget.invoiceData!['due_date'] != null) {
+          _dueDate = DateTime.parse(widget.invoiceData!['due_date']);
+        }
+      });
+    }
+  }
+
   Future<void> _loadNextInvoiceNumber() async {
+    if (_isEditMode) return;
     try {
       final orgProvider =
           Provider.of<OrganizationProvider>(context, listen: false);
@@ -403,45 +434,13 @@ class _CreatePurchaseInvoiceScreenState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Create Purchase Invoice',
-          style: TextStyle(color: Colors.black),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_outlined, color: Colors.black),
-            onPressed: () {},
-          ),
-          const SizedBox(width: 8),
-          ElevatedButton(
-            onPressed: _isLoading ? null : _savePurchaseInvoice,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryDark,
-              foregroundColor: Colors.white,
-            ),
-            child: _isLoading
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
-                : const Text('Save Purchase Invoice'),
-          ),
-          const SizedBox(width: 16),
-        ],
-      ),
+    return DialogScaffold(
+      title: _isEditMode ? 'Edit Purchase Invoice' : 'Create Purchase Invoice',
+      onSave: _savePurchaseInvoice,
+      onSettings: () {
+        Navigator.pushNamed(context, '/settings');
+      },
+      isSaving: _isLoading,
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -990,15 +989,50 @@ class _CreatePurchaseInvoiceScreenState
                       if (_markAsFullyPaid) {
                         _paymentAmountController.text =
                             _totalAmount.toStringAsFixed(2);
-                      } else {
-                        _paymentAmountController.text = '0';
                       }
+                      // When unchecked, keep the current value (don't set to 0)
                     });
                   },
                 ),
                 const Text('Mark as fully paid'),
               ],
             ),
+            const SizedBox(height: 16),
+            // Bank Account Selection
+            if (_bankAccounts.isNotEmpty) ...[
+              const Text(
+                'Bank Account',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.grey,
+                ),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<BankAccount>(
+                value: _selectedBankAccount,
+                decoration: InputDecoration(
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                ),
+                items: _bankAccounts.map((account) {
+                  return DropdownMenuItem(
+                    value: account,
+                    child: Text(
+                      '${account.accountName} - ₹${account.currentBalance.toStringAsFixed(2)}',
+                    ),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  setState(() => _selectedBankAccount = value);
+                },
+              ),
+            ],
           ],
         ),
       ),

@@ -5,6 +5,7 @@ import '../../core/constants/app_text_styles.dart';
 import '../../models/debit_note_model.dart';
 import '../../services/debit_note_service.dart';
 import '../../providers/organization_provider.dart';
+import '../../widgets/unified_data_table.dart';
 import 'create_debit_note_screen.dart';
 
 class DebitNoteScreen extends StatefulWidget {
@@ -81,6 +82,87 @@ class _DebitNoteScreenState extends State<DebitNoteScreen> {
     }
   }
 
+  void _viewDebitNote(DebitNote debitNote) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Debit Note ${debitNote.debitNoteNumber}'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildDetailRow('Supplier', debitNote.partyName ?? 'N/A'),
+              _buildDetailRow(
+                'Date',
+                '${debitNote.debitNoteDate.day.toString().padLeft(2, '0')} ${_getMonthName(debitNote.debitNoteDate.month)} ${debitNote.debitNoteDate.year}',
+              ),
+              _buildDetailRow(
+                'Amount',
+                '₹${debitNote.totalAmount.toStringAsFixed(2)}',
+              ),
+              _buildDetailRow(
+                'Amount Paid',
+                '₹${debitNote.amountPaid.toStringAsFixed(2)}',
+              ),
+              _buildDetailRow('Payment Mode', debitNote.paymentMode ?? 'N/A'),
+              _buildDetailRow('Status', debitNote.status),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              '$label:',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+          Expanded(child: Text(value)),
+        ],
+      ),
+    );
+  }
+
+  void _editDebitNote(DebitNote debitNote) async {
+    final result = await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => CreateDebitNoteScreen(
+        debitNoteId: debitNote.id,
+        debitNoteData: {
+          'debit_note_number': debitNote.debitNoteNumber,
+          'party_id': debitNote.partyId,
+          'party_name': debitNote.partyName,
+          'debit_note_date': debitNote.debitNoteDate.toIso8601String(),
+          'total_amount': debitNote.totalAmount,
+          'amount_paid': debitNote.amountPaid,
+          'payment_mode': debitNote.paymentMode,
+          'status': debitNote.status,
+        },
+      ),
+    );
+
+    if (result == true) {
+      _loadDebitNotes();
+    }
+  }
+
   void _showDeleteDialog(DebitNote debitNote) {
     showDialog(
       context: context,
@@ -130,18 +212,17 @@ class _DebitNoteScreenState extends State<DebitNoteScreen> {
               Text('Debit Note', style: AppTextStyles.h1),
               ElevatedButton(
                 onPressed: () async {
-                  final result = await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const CreateDebitNoteScreen(),
-                    ),
+                  final result = await showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (context) => const CreateDebitNoteScreen(),
                   );
                   if (result == true) {
                     _loadDebitNotes();
                   }
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.purple[700],
+                  backgroundColor: Colors.black,
                   foregroundColor: Colors.white,
                   padding:
                       const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -191,69 +272,47 @@ class _DebitNoteScreenState extends State<DebitNoteScreen> {
                 : _debitNotes.isEmpty
                     ? const Center(child: Text('No debit notes found'))
                     : Card(
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: DataTable(
-                            columns: const [
-                              DataColumn(label: Text('Date')),
-                              DataColumn(label: Text('Debit Note Number')),
-                              DataColumn(label: Text('Supplier Name')),
-                              DataColumn(label: Text('Amount')),
-                              DataColumn(label: Text('Amount Paid')),
-                              DataColumn(label: Text('Payment Mode')),
-                              DataColumn(label: Text('Status')),
-                              DataColumn(label: Text('Actions')),
-                            ],
-                            rows: _debitNotes.map((debitNote) {
-                              return DataRow(cells: [
-                                DataCell(Text(
-                                    '${debitNote.debitNoteDate.day.toString().padLeft(2, '0')} ${_getMonthName(debitNote.debitNoteDate.month)} ${debitNote.debitNoteDate.year}')),
-                                DataCell(Text(debitNote.debitNoteNumber)),
-                                DataCell(Text(debitNote.partyName ?? '-')),
-                                DataCell(Text(
-                                    '₹ ${debitNote.totalAmount.toStringAsFixed(2)}')),
-                                DataCell(Text(
-                                    '₹ ${debitNote.amountPaid.toStringAsFixed(2)}')),
-                                DataCell(Text(debitNote.paymentMode ?? '-')),
-                                DataCell(
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: debitNote.status == 'issued'
-                                          ? Colors.blue[50]
-                                          : debitNote.status == 'cancelled'
-                                              ? Colors.red[50]
-                                              : Colors.grey[50],
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      debitNote.status == 'issued'
-                                          ? 'Issued'
-                                          : debitNote.status == 'cancelled'
-                                              ? 'Cancelled'
-                                              : 'Draft',
-                                      style: TextStyle(
-                                        color: debitNote.status == 'issued'
-                                            ? Colors.blue[700]
-                                            : debitNote.status == 'cancelled'
-                                                ? Colors.red[700]
-                                                : Colors.grey[700],
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ),
+                        child: UnifiedDataTable(
+                          columns: const [
+                            DataColumn(label: TableHeader('Date')),
+                            DataColumn(label: TableHeader('Debit Note Number')),
+                            DataColumn(label: TableHeader('Supplier Name')),
+                            DataColumn(label: TableHeader('Amount')),
+                            DataColumn(label: TableHeader('Amount Paid')),
+                            DataColumn(label: TableHeader('Payment Mode')),
+                            DataColumn(label: TableHeader('Status')),
+                            DataColumn(label: TableHeader('Actions')),
+                          ],
+                          rows: _debitNotes.map((debitNote) {
+                            return DataRow(cells: [
+                              DataCell(TableCellText(
+                                  '${debitNote.debitNoteDate.day.toString().padLeft(2, '0')} ${_getMonthName(debitNote.debitNoteDate.month)} ${debitNote.debitNoteDate.year}')),
+                              DataCell(
+                                  TableCellText(debitNote.debitNoteNumber)),
+                              DataCell(
+                                  TableCellText(debitNote.partyName ?? '-')),
+                              DataCell(TableCellText(
+                                  '₹ ${debitNote.totalAmount.toStringAsFixed(2)}')),
+                              DataCell(TableCellText(
+                                  '₹ ${debitNote.amountPaid.toStringAsFixed(2)}')),
+                              DataCell(
+                                  TableCellText(debitNote.paymentMode ?? '-')),
+                              DataCell(TableStatusBadge(
+                                debitNote.status == 'issued'
+                                    ? 'Issued'
+                                    : debitNote.status == 'cancelled'
+                                        ? 'Cancelled'
+                                        : 'Draft',
+                              )),
+                              DataCell(
+                                TableActionButtons(
+                                  onView: () => _viewDebitNote(debitNote),
+                                  onEdit: () => _editDebitNote(debitNote),
+                                  onDelete: () => _showDeleteDialog(debitNote),
                                 ),
-                                DataCell(
-                                  IconButton(
-                                    icon: const Icon(Icons.more_vert),
-                                    onPressed: () =>
-                                        _showDeleteDialog(debitNote),
-                                  ),
-                                ),
-                              ]);
-                            }).toList(),
-                          ),
+                              ),
+                            ]);
+                          }).toList(),
                         ),
                       ),
           ),

@@ -55,13 +55,13 @@ class Quotation {
 
   factory Quotation.fromJson(Map<String, dynamic> json) {
     return Quotation(
-      id: json['id'],
-      organizationId: json['organization_id'],
-      partyId: json['party_id'],
-      userId: json['user_id'],
-      quotationNumber: json['quotation_number'],
+      id: json['id'] != null ? int.parse(json['id'].toString()) : null,
+      organizationId: int.parse(json['organization_id'].toString()),
+      partyId: int.parse(json['party_id'].toString()),
+      userId: int.parse(json['user_id'].toString()),
+      quotationNumber: json['quotation_number'].toString(),
       quotationDate: DateTime.parse(json['quotation_date']),
-      validFor: json['valid_for'],
+      validFor: int.parse(json['valid_for'].toString()),
       validityDate: DateTime.parse(json['validity_date']),
       subtotal: double.parse(json['subtotal'].toString()),
       discountAmount: double.parse(json['discount_amount'].toString()),
@@ -69,12 +69,14 @@ class Quotation {
       additionalCharges: double.parse(json['additional_charges'].toString()),
       roundOff: double.parse(json['round_off'].toString()),
       totalAmount: double.parse(json['total_amount'].toString()),
-      status: json['status'],
-      notes: json['notes'],
-      termsConditions: json['terms_conditions'],
-      bankDetails: json['bank_details'],
-      showBankDetails: json['show_bank_details'] ?? true,
-      autoRoundOff: json['auto_round_off'] ?? false,
+      status: json['status'].toString(),
+      notes: json['notes']?.toString(),
+      termsConditions: json['terms_conditions']?.toString(),
+      bankDetails: json['bank_details']?.toString(),
+      showBankDetails:
+          json['show_bank_details'] == true || json['show_bank_details'] == 1,
+      autoRoundOff:
+          json['auto_round_off'] == true || json['auto_round_off'] == 1,
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'])
           : null,

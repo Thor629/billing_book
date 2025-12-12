@@ -11,9 +11,18 @@ import '../../services/bank_account_service.dart';
 import '../../services/sales_invoice_service.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/organization_provider.dart';
+import '../../utils/barcode_scanner.dart';
+import '../../widgets/dialog_scaffold.dart';
 
 class CreateSalesInvoiceScreen extends StatefulWidget {
-  const CreateSalesInvoiceScreen({super.key});
+  final int? invoiceId;
+  final Map<String, dynamic>? invoiceData;
+
+  const CreateSalesInvoiceScreen({
+    super.key,
+    this.invoiceId,
+    this.invoiceData,
+  });
 
   @override
   State<CreateSalesInvoiceScreen> createState() =>
@@ -59,6 +68,7 @@ class _CreateSalesInvoiceScreenState extends State<CreateSalesInvoiceScreen> {
   bool _autoRoundOff = false;
   bool _markAsFullyPaid = false;
   String _paymentMode = 'Cash';
+  double _overallDiscountAmount = 0;
 
   // New state variables
   PartyModel? _selectedParty;
@@ -67,14 +77,119 @@ class _CreateSalesInvoiceScreenState extends State<CreateSalesInvoiceScreen> {
   List<BankAccount> _bankAccounts = [];
   bool _isLoading = false;
 
+  bool get _isEditMode =>
+      widget.invoiceId != null || widget.invoiceData != null;
+
   @override
   void initState() {
     super.initState();
+    _loadInitialData();
     _loadBankAccounts();
     _loadNextInvoiceNumber();
   }
 
+  Future<void> _loadInitialData() async {
+    if (widget.invoiceId != null) {
+      // Fetch full invoice data from API using ID
+      try {
+        final salesInvoiceService = SalesInvoiceService();
+        final invoice = await salesInvoiceService.getInvoice(widget.invoiceId!);
+
+        debugPrint('📦 Invoice loaded: ${invoice.fullInvoiceNumber}');
+        debugPrint('📦 Items count: ${invoice.items?.length ?? 0}');
+        if (invoice.items != null) {
+          for (var item in invoice.items!) {
+            debugPrint(
+                '  - Item: ${item.itemName}, Qty: ${item.quantity}, Price: ${item.pricePerUnit}');
+          }
+        }
+
+        setState(() {
+          _invoiceNumberController.text = invoice.fullInvoiceNumber;
+          _invoiceDate = invoice.invoiceDate;
+          _dueDate = invoice.dueDate;
+          if (invoice.party != null) {
+            _selectedParty = PartyModel(
+              id: invoice.party!.id,
+              name: invoice.party!.name,
+              phone: invoice.party!.phone ?? '',
+              email: invoice.party!.email,
+              gstNo: '',
+              billingAddress: '',
+              shippingAddress: '',
+              partyType: 'customer',
+              isActive: true,
+              organizationId: invoice.organizationId,
+              createdAt: DateTime.now(),
+            );
+          }
+          _amountReceivedController.text = invoice.amountReceived.toString();
+          // Load items
+          if (invoice.items != null && invoice.items!.isNotEmpty) {
+            _invoiceItems = invoice.items!.map((apiItem) {
+              // Create a minimal ItemModel from API data
+              final itemModel = ItemModel(
+                id: apiItem.itemId,
+                organizationId: invoice.organizationId,
+                itemName: apiItem.itemName,
+                itemCode: apiItem.itemCode ?? '',
+                sellingPrice: apiItem.pricePerUnit,
+                sellingPriceWithTax: false,
+                purchasePrice: 0,
+                purchasePriceWithTax: false,
+                mrp: apiItem.mrp ?? 0,
+                stockQty: 0,
+                openingStock: 0,
+                unit: apiItem.unit,
+                lowStockAlert: 0,
+                enableLowStockWarning: false,
+                hsnCode: apiItem.hsnSac,
+                gstRate: apiItem.taxPercent,
+                isActive: true,
+                createdAt: DateTime.now(),
+              );
+
+              // Create InvoiceItem with the ItemModel
+              return InvoiceItem(
+                item: itemModel,
+                quantity: apiItem.quantity,
+                pricePerUnit: apiItem.pricePerUnit,
+                discountPercent: apiItem.discountPercent,
+                taxPercent: apiItem.taxPercent,
+              );
+            }).toList();
+          }
+        });
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error loading invoice: $e')),
+          );
+        }
+      }
+    } else if (widget.invoiceData != null) {
+      // Fallback to basic data
+      setState(() {
+        if (widget.invoiceData!['invoice_number'] != null) {
+          _invoiceNumberController.text =
+              widget.invoiceData!['invoice_number'].toString();
+        }
+        if (widget.invoiceData!['invoice_date'] != null) {
+          _invoiceDate = DateTime.parse(widget.invoiceData!['invoice_date']);
+        }
+        if (widget.invoiceData!['due_date'] != null) {
+          _dueDate = DateTime.parse(widget.invoiceData!['due_date']);
+        }
+        if (widget.invoiceData!['amount_received'] != null) {
+          _amountReceivedController.text =
+              widget.invoiceData!['amount_received'].toString();
+        }
+      });
+    }
+  }
+
   Future<void> _loadNextInvoiceNumber() async {
+    if (_isEditMode) return;
     try {
       final orgProvider =
           Provider.of<OrganizationProvider>(context, listen: false);
@@ -147,69 +262,35 @@ class _CreateSalesInvoiceScreenState extends State<CreateSalesInvoiceScreen> {
   }
 
   double get _subtotal =>
-      _invoiceItems.fold(0, (sum, item) => sum + item.subtotal);
+      _invoiceItems.fold(0.0, (sum, item) => sum + item.subtotal);
   double get _totalDiscount =>
-      _invoiceItems.fold(0, (sum, item) => sum + item.discountAmount);
+      _invoiceItems.fold(0.0, (sum, item) => sum + item.discountAmount) +
+      _overallDiscountAmount;
   double get _totalTax =>
-      _invoiceItems.fold(0, (sum, item) => sum + item.taxAmount);
+      _invoiceItems.fold(0.0, (sum, item) => sum + item.taxAmount);
+  double get _roundOffAmount => _autoRoundOff
+      ? (_subtotal - _totalDiscount + _totalTax).roundToDouble() -
+          (_subtotal - _totalDiscount + _totalTax)
+      : 0.0;
   double get _totalAmount =>
-      _invoiceItems.fold(0, (sum, item) => sum + item.lineTotal);
+      _subtotal - _totalDiscount + _totalTax + _roundOffAmount;
 
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
+      return const DialogScaffold(
+        title: 'Loading...',
         body: Center(child: CircularProgressIndicator()),
       );
     }
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Create Sales Invoice',
-          style: TextStyle(color: Colors.black),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.qr_code_scanner, color: Colors.black),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.settings_outlined, color: Colors.black),
-            onPressed: () {},
-          ),
-          TextButton(
-            onPressed: _isLoading ? null : _saveAndNew,
-            child: const Text('Save & New'),
-          ),
-          const SizedBox(width: 8),
-          ElevatedButton(
-            onPressed: _isLoading ? null : _saveInvoice,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryDark,
-              foregroundColor: Colors.white,
-            ),
-            child: _isLoading
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
-                : const Text('Save'),
-          ),
-          const SizedBox(width: 16),
-        ],
-      ),
+    return DialogScaffold(
+      title: _isEditMode ? 'Edit Sales Invoice' : 'Create Sales Invoice',
+      onSave: _saveInvoice,
+      onSettings: () {
+        Navigator.pushNamed(context, '/settings');
+      },
+      isSaving: _isLoading,
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -955,7 +1036,7 @@ class _CreateSalesInvoiceScreenState extends State<CreateSalesInvoiceScreen> {
             _buildTotalRow('Tax', '₹${_totalTax.toStringAsFixed(2)}'),
             const Divider(height: 24),
             TextButton.icon(
-              onPressed: () {},
+              onPressed: _showDiscountDialog,
               icon: const Icon(Icons.add, size: 18),
               label: const Text('Add Discount'),
             ),
@@ -979,16 +1060,7 @@ class _CreateSalesInvoiceScreenState extends State<CreateSalesInvoiceScreen> {
                 ),
                 const Text('Auto Round Off'),
                 const Spacer(),
-                DropdownButton<String>(
-                  value: '₹',
-                  underline: const SizedBox(),
-                  items: const [
-                    DropdownMenuItem(value: '₹', child: Text('₹')),
-                  ],
-                  onChanged: (value) {},
-                ),
-                const SizedBox(width: 8),
-                const Text('0'),
+                Text('₹${_roundOffAmount.toStringAsFixed(2)}'),
               ],
             ),
             const Divider(height: 24),
@@ -1046,6 +1118,7 @@ class _CreateSalesInvoiceScreenState extends State<CreateSalesInvoiceScreen> {
                         _amountReceivedController.text =
                             _totalAmount.toStringAsFixed(2);
                       }
+                      // When unchecked, keep the current value (don't clear it)
                     });
                   },
                 ),
@@ -1149,6 +1222,44 @@ class _CreateSalesInvoiceScreenState extends State<CreateSalesInvoiceScreen> {
       'Dec'
     ];
     return months[month - 1];
+  }
+
+  Future<void> _showDiscountDialog() async {
+    final controller =
+        TextEditingController(text: _overallDiscountAmount.toString());
+
+    final result = await showDialog<double>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Overall Discount'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'Discount Amount',
+            prefixText: '₹ ',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final amount = double.tryParse(controller.text) ?? 0;
+              Navigator.pop(context, amount);
+            },
+            child: const Text('Apply'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null) {
+      setState(() => _overallDiscountAmount = result);
+    }
   }
 
   Future<void> _saveAndNew() async {

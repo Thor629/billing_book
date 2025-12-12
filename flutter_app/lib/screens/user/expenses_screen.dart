@@ -5,6 +5,7 @@ import '../../models/expense_model.dart';
 import '../../services/expense_service.dart';
 import '../../providers/organization_provider.dart';
 import '../../core/constants/app_colors.dart';
+import '../../widgets/unified_data_table.dart';
 import 'create_expense_screen.dart';
 
 class ExpensesScreen extends StatefulWidget {
@@ -109,7 +110,9 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                 const SizedBox(width: 8),
                 IconButton(
                   icon: const Icon(Icons.settings_outlined),
-                  onPressed: () {},
+                  onPressed: () {
+                    Navigator.pushNamed(context, '/settings');
+                  },
                 ),
                 IconButton(
                   icon: const Icon(Icons.grid_view),
@@ -275,54 +278,176 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                           ],
                         ),
                       )
-                    : SingleChildScrollView(
-                        child: DataTable(
-                          headingRowColor: WidgetStateProperty.all(
-                            Colors.grey[100],
-                          ),
-                          columns: const [
-                            DataColumn(label: Text('Date')),
-                            DataColumn(label: Text('Expense Number')),
-                            DataColumn(label: Text('Party Name')),
-                            DataColumn(label: Text('Category')),
-                            DataColumn(label: Text('Amount')),
-                          ],
-                          rows: _expenses
-                              .map(
-                                (expense) => DataRow(
-                                  cells: [
-                                    DataCell(
-                                      Text(
-                                        DateFormat('dd MMM yyyy')
-                                            .format(expense.expenseDate),
-                                      ),
+                    : UnifiedDataTable(
+                        columns: const [
+                          DataColumn(label: TableHeader('Date')),
+                          DataColumn(label: TableHeader('Expense Number')),
+                          DataColumn(label: TableHeader('Party Name')),
+                          DataColumn(label: TableHeader('Category')),
+                          DataColumn(label: TableHeader('Amount')),
+                          DataColumn(label: TableHeader('Actions')),
+                        ],
+                        rows: _expenses
+                            .map(
+                              (expense) => DataRow(
+                                cells: [
+                                  DataCell(TableCellText(
+                                    DateFormat('dd MMM yyyy')
+                                        .format(expense.expenseDate),
+                                  )),
+                                  DataCell(
+                                      TableCellText(expense.expenseNumber)),
+                                  DataCell(TableCellText(
+                                      expense.party?.name ?? '-')),
+                                  DataCell(TableCellText(expense.category)),
+                                  DataCell(
+                                      TableAmount(amount: expense.totalAmount)),
+                                  DataCell(
+                                    TableActionButtons(
+                                      onView: () => _viewExpense(expense),
+                                      onEdit: () => _editExpense(expense),
+                                      onDelete: () => _deleteExpense(expense),
                                     ),
-                                    DataCell(
-                                      Text(expense.expenseNumber),
-                                    ),
-                                    DataCell(
-                                      Text(expense.party?.name ?? '-'),
-                                    ),
-                                    DataCell(
-                                      Text(expense.category),
-                                    ),
-                                    DataCell(
-                                      Text(
-                                        '₹${NumberFormat('#,##,###.##').format(expense.totalAmount)}',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              )
-                              .toList(),
-                        ),
+                                  ),
+                                ],
+                              ),
+                            )
+                            .toList(),
                       ),
           ),
         ],
       ),
     );
+  }
+
+  void _viewExpense(Expense expense) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Expense ${expense.expenseNumber}'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildDetailRow('Party', expense.party?.name ?? 'N/A'),
+              _buildDetailRow(
+                'Date',
+                DateFormat('dd MMM yyyy').format(expense.expenseDate),
+              ),
+              _buildDetailRow('Category', expense.category),
+              _buildDetailRow(
+                'Amount',
+                '₹${expense.totalAmount.toStringAsFixed(2)}',
+              ),
+              _buildDetailRow('Payment Mode', expense.paymentMode ?? 'N/A'),
+              if (expense.notes != null && expense.notes!.isNotEmpty)
+                _buildDetailRow('Notes', expense.notes!),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              '$label:',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+          Expanded(child: Text(value)),
+        ],
+      ),
+    );
+  }
+
+  void _editExpense(Expense expense) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CreateExpenseScreen(
+          expenseId: expense.id,
+          expenseData: {
+            'expense_number': expense.expenseNumber,
+            'party_id': expense.party?.id,
+            'party_name': expense.party?.name,
+            'expense_date': expense.expenseDate.toIso8601String(),
+            'category': expense.category,
+            'payment_mode': expense.paymentMode,
+            'total_amount': expense.totalAmount,
+            'notes': expense.notes,
+          },
+        ),
+      ),
+    ).then((result) {
+      if (result == true) {
+        _loadExpenses();
+      }
+    });
+  }
+
+  Future<void> _deleteExpense(Expense expense) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Expense'),
+        content: Text(
+          'Are you sure you want to delete expense ${expense.expenseNumber}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && mounted) {
+      try {
+        final orgProvider =
+            Provider.of<OrganizationProvider>(context, listen: false);
+        await _expenseService.deleteExpense(expense.id!);
+        _loadExpenses();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Expense deleted successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error deleting expense: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
   }
 }

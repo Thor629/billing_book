@@ -5,6 +5,7 @@ import '../../core/constants/app_text_styles.dart';
 import '../../models/payment_in_model.dart';
 import '../../services/payment_in_service.dart';
 import '../../providers/organization_provider.dart';
+import '../../widgets/unified_data_table.dart';
 import 'create_payment_in_screen.dart';
 
 class PaymentInScreen extends StatefulWidget {
@@ -81,18 +82,18 @@ class _PaymentInScreenState extends State<PaymentInScreen> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: Colors.purple[50],
+                        color: Colors.black,
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Row(
                         children: [
                           Icon(Icons.check_circle,
-                              size: 16, color: Colors.purple[700]),
+                              size: 16, color: Colors.white),
                           const SizedBox(width: 4),
                           Text(
                             'Payment Received',
                             style: TextStyle(
-                              color: Colors.purple[700],
+                              color: Colors.white,
                               fontSize: 12,
                               fontWeight: FontWeight.w500,
                             ),
@@ -106,7 +107,9 @@ class _PaymentInScreenState extends State<PaymentInScreen> {
                   children: [
                     IconButton(
                       icon: const Icon(Icons.settings_outlined),
-                      onPressed: () {},
+                      onPressed: () {
+                        Navigator.pushNamed(context, '/settings');
+                      },
                       tooltip: 'Settings',
                     ),
                     IconButton(
@@ -189,7 +192,7 @@ class _PaymentInScreenState extends State<PaymentInScreen> {
                   icon: const Icon(Icons.add),
                   label: const Text('Create Payment In'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.purple[700],
+                    backgroundColor: Colors.black,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 20,
@@ -232,35 +235,15 @@ class _PaymentInScreenState extends State<PaymentInScreen> {
                             ],
                           ),
                         )
-                      : Card(
-                          child: SizedBox(
-                            width: double.infinity,
-                            child: SingleChildScrollView(
-                              child: SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                child: ConstrainedBox(
-                                  constraints: BoxConstraints(
-                                    minWidth:
-                                        MediaQuery.of(context).size.width - 300,
-                                  ),
-                                  child: DataTable(
-                                    showCheckboxColumn: false,
-                                    columnSpacing: 40,
-                                    headingRowColor: WidgetStateProperty.all(
-                                        Colors.grey[50]),
-                                    columns: const [
-                                      DataColumn(label: Text('Date')),
-                                      DataColumn(label: Text('Payment Number')),
-                                      DataColumn(label: Text('Party Name')),
-                                      DataColumn(label: Text('Amount')),
-                                      DataColumn(label: Text('Actions')),
-                                    ],
-                                    rows: _buildPaymentRows(),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
+                      : UnifiedDataTable(
+                          columns: const [
+                            DataColumn(label: TableHeader('Date')),
+                            DataColumn(label: TableHeader('Payment Number')),
+                            DataColumn(label: TableHeader('Party Name')),
+                            DataColumn(label: TableHeader('Amount')),
+                            DataColumn(label: TableHeader('Actions')),
+                          ],
+                          rows: _buildPaymentRows(),
                         ),
             ),
           ],
@@ -273,19 +256,18 @@ class _PaymentInScreenState extends State<PaymentInScreen> {
     return _payments.map((payment) {
       return DataRow(
         cells: [
-          DataCell(Text(_formatDate(payment.paymentDate))),
-          DataCell(Text(payment.paymentNumber)),
-          DataCell(Text(payment.party?.name ?? 'N/A')),
-          DataCell(Text('₹${payment.amount.toStringAsFixed(2)}')),
+          DataCell(TableCellText(_formatDate(payment.paymentDate))),
+          DataCell(TableCellText(payment.paymentNumber)),
+          DataCell(TableCellText(payment.party?.name ?? 'N/A')),
+          DataCell(TableCellText(
+            '₹${payment.amount.toStringAsFixed(2)}',
+            style: AppTextStyles.currency,
+          )),
           DataCell(
-            PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert, size: 18),
-              itemBuilder: (context) => [
-                const PopupMenuItem(value: 'view', child: Text('View')),
-                const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                const PopupMenuItem(value: 'delete', child: Text('Delete')),
-              ],
-              onSelected: (value) => _handlePaymentAction(value, payment),
+            TableActionButtons(
+              onView: () => _viewPayment(payment),
+              onEdit: () => _editPayment(payment),
+              onDelete: () => _deletePayment(payment),
             ),
           ),
         ],
@@ -314,14 +296,106 @@ class _PaymentInScreenState extends State<PaymentInScreen> {
   void _handlePaymentAction(String action, PaymentIn payment) {
     switch (action) {
       case 'view':
-        // TODO: Implement view payment
+        _viewPayment(payment);
         break;
       case 'edit':
-        // TODO: Implement edit payment
+        _editPayment(payment);
+        break;
+      case 'duplicate':
+        _duplicatePayment(payment);
         break;
       case 'delete':
         _deletePayment(payment);
         break;
+    }
+  }
+
+  void _viewPayment(PaymentIn payment) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Payment ${payment.paymentNumber}'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildDetailRow('Party', payment.party?.name ?? 'N/A'),
+              _buildDetailRow('Date', _formatDate(payment.paymentDate)),
+              _buildDetailRow(
+                  'Amount', '₹${payment.amount.toStringAsFixed(2)}'),
+              _buildDetailRow('Payment Mode', payment.paymentMode),
+              if (payment.notes != null && payment.notes!.isNotEmpty)
+                _buildDetailRow('Notes', payment.notes!),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(
+              '$label:',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+          Expanded(child: Text(value)),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _editPayment(PaymentIn payment) async {
+    final result = await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => CreatePaymentInScreen(
+        paymentId: payment.id,
+        paymentData: {
+          'payment_number': payment.paymentNumber,
+          'party_id': payment.party?.id,
+          'party_name': payment.party?.name,
+          'amount': payment.amount,
+          'payment_mode': payment.paymentMode,
+          'payment_date': payment.paymentDate.toIso8601String(),
+          'notes': payment.notes,
+        },
+      ),
+    );
+
+    if (result == true) {
+      _loadPayments();
+    }
+  }
+
+  Future<void> _duplicatePayment(PaymentIn payment) async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Duplicating payment ${payment.paymentNumber}...'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+    final result = await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const CreatePaymentInScreen(),
+    );
+    if (result == true) {
+      _loadPayments();
     }
   }
 
@@ -369,19 +443,7 @@ class _PaymentInScreenState extends State<PaymentInScreen> {
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            maxWidth: 900,
-            maxHeight: 700,
-          ),
-          child: const SizedBox(
-            width: 900,
-            child: CreatePaymentInScreen(),
-          ),
-        ),
-      ),
+      builder: (context) => const CreatePaymentInScreen(),
     );
 
     // Reload payments if a payment was successfully created

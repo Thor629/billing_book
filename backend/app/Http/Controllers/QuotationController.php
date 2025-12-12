@@ -13,7 +13,7 @@ class QuotationController extends Controller
     public function index(Request $request)
     {
         $query = Quotation::with(['party', 'organization', 'user'])
-            ->where('organization_id', $request->user()->currentOrganization->id ?? null);
+            ->where('organization_id', $request->header('X-Organization-Id'));
 
         // Filter by date range
         if ($request->has('date_filter')) {
@@ -48,15 +48,15 @@ class QuotationController extends Controller
 
         // Calculate summary
         $summary = [
-            'total_quotations' => Quotation::where('organization_id', $request->user()->currentOrganization->id ?? null)
+            'total_quotations' => Quotation::where('organization_id', $request->header('X-Organization-Id'))
                 ->count(),
-            'open' => Quotation::where('organization_id', $request->user()->currentOrganization->id ?? null)
+            'open' => Quotation::where('organization_id', $request->header('X-Organization-Id'))
                 ->where('status', 'open')
                 ->count(),
-            'accepted' => Quotation::where('organization_id', $request->user()->currentOrganization->id ?? null)
+            'accepted' => Quotation::where('organization_id', $request->header('X-Organization-Id'))
                 ->where('status', 'accepted')
                 ->count(),
-            'total_amount' => Quotation::where('organization_id', $request->user()->currentOrganization->id ?? null)
+            'total_amount' => Quotation::where('organization_id', $request->header('X-Organization-Id'))
                 ->sum('total_amount'),
         ];
 
@@ -89,7 +89,7 @@ class QuotationController extends Controller
         try {
             DB::beginTransaction();
 
-            $organizationId = $request->user()->currentOrganization->id ?? null;
+            $organizationId = $request->header('X-Organization-Id');
             
             // Check for duplicate quotation number
             $exists = Quotation::where('organization_id', $organizationId)
@@ -266,7 +266,7 @@ class QuotationController extends Controller
 
     public function getNextQuotationNumber(Request $request)
     {
-        $organizationId = $request->user()->currentOrganization->id ?? null;
+        $organizationId = $request->header('X-Organization-Id');
 
         $lastQuotation = Quotation::where('organization_id', $organizationId)
             ->orderBy('quotation_number', 'desc')

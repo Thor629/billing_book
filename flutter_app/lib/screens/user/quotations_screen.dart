@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_text_styles.dart';
 import '../../models/quotation_model.dart';
 import '../../services/quotation_service.dart';
+import '../../providers/organization_provider.dart';
+import '../../widgets/unified_data_table.dart';
 import 'create_quotation_screen.dart';
 
 class QuotationsScreen extends StatefulWidget {
@@ -32,9 +35,18 @@ class _QuotationsScreenState extends State<QuotationsScreen> {
   }
 
   Future<void> _loadQuotations() async {
+    final orgProvider =
+        Provider.of<OrganizationProvider>(context, listen: false);
+
+    if (orgProvider.selectedOrganization == null) {
+      setState(() => _isLoading = false);
+      return;
+    }
+
     setState(() => _isLoading = true);
     try {
       final result = await _quotationService.getQuotations(
+        organizationId: orgProvider.selectedOrganization!.id,
         dateFilter: _selectedFilter,
         statusFilter: _selectedStatusFilter,
       );
@@ -71,7 +83,9 @@ class _QuotationsScreenState extends State<QuotationsScreen> {
                   children: [
                     IconButton(
                       icon: const Icon(Icons.settings_outlined),
-                      onPressed: () {},
+                      onPressed: () {
+                        Navigator.pushNamed(context, '/settings');
+                      },
                       tooltip: 'Settings',
                     ),
                     IconButton(
@@ -118,8 +132,7 @@ class _QuotationsScreenState extends State<QuotationsScreen> {
                 Expanded(
                   child: _buildMetricCard(
                     title: 'Total Amount',
-                    value:
-                        '₹${(_summary['total_amount'] ?? 0.0).toStringAsFixed(2)}',
+                    value: '₹${_formatAmount(_summary['total_amount'])}',
                     icon: Icons.currency_rupee,
                     color: Colors.purple,
                   ),
@@ -273,36 +286,17 @@ class _QuotationsScreenState extends State<QuotationsScreen> {
                             ],
                           ),
                         )
-                      : Card(
-                          child: SizedBox(
-                            width: double.infinity,
-                            child: SingleChildScrollView(
-                              child: SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                child: ConstrainedBox(
-                                  constraints: BoxConstraints(
-                                    minWidth:
-                                        MediaQuery.of(context).size.width - 300,
-                                  ),
-                                  child: DataTable(
-                                    showCheckboxColumn: true,
-                                    columnSpacing: 40,
-                                    columns: const [
-                                      DataColumn(label: Text('Date')),
-                                      DataColumn(
-                                          label: Text('Quotation Number')),
-                                      DataColumn(label: Text('Party Name')),
-                                      DataColumn(label: Text('Due In')),
-                                      DataColumn(label: Text('Amount')),
-                                      DataColumn(label: Text('Status')),
-                                      DataColumn(label: Text('Actions')),
-                                    ],
-                                    rows: _buildQuotationRows(),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
+                      : UnifiedDataTable(
+                          columns: const [
+                            DataColumn(label: TableHeader('Date')),
+                            DataColumn(label: TableHeader('Quotation Number')),
+                            DataColumn(label: TableHeader('Party Name')),
+                            DataColumn(label: TableHeader('Due In')),
+                            DataColumn(label: TableHeader('Amount')),
+                            DataColumn(label: TableHeader('Status')),
+                            DataColumn(label: TableHeader('Actions')),
+                          ],
+                          rows: _buildQuotationRows(),
                         ),
             ),
           ],
@@ -312,6 +306,31 @@ class _QuotationsScreenState extends State<QuotationsScreen> {
   }
 
   List<DataRow> _buildQuotationRows() {
+    return _quotations.map((quotation) {
+      return DataRow(
+        cells: [
+          DataCell(TableCellText(_formatDate(quotation.quotationDate))),
+          DataCell(TableCellText(quotation.quotationNumber)),
+          DataCell(TableCellText(quotation.party?.name ?? 'N/A')),
+          DataCell(TableCellText(quotation.dueInText)),
+          DataCell(TableCellText(
+            '₹${_formatAmount(quotation.totalAmount)}',
+            style: AppTextStyles.currency,
+          )),
+          DataCell(TableStatusBadge(quotation.status)),
+          DataCell(
+            TableActionButtons(
+              onView: () => _viewQuotation(quotation),
+              onEdit: () => _editQuotation(quotation),
+              onDelete: () => _deleteQuotation(quotation),
+            ),
+          ),
+        ],
+      );
+    }).toList();
+  }
+
+  List<DataRow> _buildQuotationRowsOld() {
     return _quotations.map((quotation) {
       final isExpired = quotation.isExpired;
 
@@ -328,17 +347,62 @@ class _QuotationsScreenState extends State<QuotationsScreen> {
               ),
             ),
           ),
-          DataCell(Text('₹${quotation.totalAmount.toStringAsFixed(2)}')),
+          DataCell(Text('₹${_formatAmount(quotation.totalAmount)}')),
           DataCell(_buildStatusBadge(quotation.status)),
           DataCell(
             PopupMenuButton<String>(
               icon: const Icon(Icons.more_vert, size: 18),
               itemBuilder: (context) => [
-                const PopupMenuItem(value: 'view', child: Text('View')),
-                const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                const PopupMenuItem(value: 'delete', child: Text('Delete')),
                 const PopupMenuItem(
-                    value: 'convert', child: Text('Convert to Invoice')),
+                  value: 'view',
+                  child: Row(
+                    children: [
+                      Icon(Icons.visibility, size: 18),
+                      SizedBox(width: 8),
+                      Text('View'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'edit',
+                  child: Row(
+                    children: [
+                      Icon(Icons.edit, size: 18),
+                      SizedBox(width: 8),
+                      Text('Edit'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'duplicate',
+                  child: Row(
+                    children: [
+                      Icon(Icons.content_copy, size: 18),
+                      SizedBox(width: 8),
+                      Text('Duplicate'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'delete',
+                  child: Row(
+                    children: [
+                      Icon(Icons.delete, size: 18, color: Colors.red),
+                      SizedBox(width: 8),
+                      Text('Delete', style: TextStyle(color: Colors.red)),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'convert',
+                  child: Row(
+                    children: [
+                      Icon(Icons.transform, size: 18),
+                      SizedBox(width: 8),
+                      Text('Convert to Invoice'),
+                    ],
+                  ),
+                ),
               ],
               onSelected: (value) => _handleQuotationAction(value, quotation),
             ),
@@ -387,6 +451,16 @@ class _QuotationsScreenState extends State<QuotationsScreen> {
     );
   }
 
+  String _formatAmount(dynamic amount) {
+    if (amount == null) return '0.00';
+    if (amount is num) return amount.toStringAsFixed(2);
+    if (amount is String) {
+      final parsed = double.tryParse(amount);
+      return parsed?.toStringAsFixed(2) ?? '0.00';
+    }
+    return '0.00';
+  }
+
   String _formatDate(DateTime date) {
     const months = [
       'Jan',
@@ -408,21 +482,123 @@ class _QuotationsScreenState extends State<QuotationsScreen> {
   void _handleQuotationAction(String action, Quotation quotation) {
     switch (action) {
       case 'view':
-        // TODO: Implement view quotation
+        _viewQuotation(quotation);
         break;
       case 'edit':
-        // TODO: Implement edit quotation
+        _editQuotation(quotation);
+        break;
+      case 'duplicate':
+        _duplicateQuotation(quotation);
         break;
       case 'delete':
         _deleteQuotation(quotation);
         break;
       case 'convert':
-        // TODO: Implement convert to invoice
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Convert to invoice coming soon')),
-        );
+        _convertToInvoice(quotation);
         break;
     }
+  }
+
+  void _viewQuotation(Quotation quotation) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Quotation ${quotation.quotationNumber}'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildDetailRow('Party', quotation.party?.name ?? 'N/A'),
+              _buildDetailRow('Date', _formatDate(quotation.quotationDate)),
+              _buildDetailRow(
+                  'Valid Until', _formatDate(quotation.validityDate)),
+              _buildDetailRow(
+                  'Amount', '₹${quotation.totalAmount.toStringAsFixed(2)}'),
+              _buildDetailRow('Status', quotation.status.toUpperCase()),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(
+              '$label:',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+          Expanded(child: Text(value)),
+        ],
+      ),
+    );
+  }
+
+  void _editQuotation(Quotation quotation) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CreateQuotationScreen(
+          quotationId: quotation.id,
+          quotationData: {
+            'quotation_number': quotation.quotationNumber,
+            'party_id': quotation.party?.id,
+            'party_name': quotation.party?.name,
+            'quotation_date': quotation.quotationDate.toIso8601String(),
+            'validity_date': quotation.validityDate.toIso8601String(),
+            'total_amount': quotation.totalAmount,
+            'status': quotation.status,
+          },
+        ),
+      ),
+    ).then((result) {
+      if (result == true) {
+        _loadQuotations();
+      }
+    });
+  }
+
+  void _duplicateQuotation(Quotation quotation) {
+    // Navigate to create screen with duplicated data
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Duplicating quotation ${quotation.quotationNumber}...'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const CreateQuotationScreen(),
+      ),
+    ).then((result) {
+      if (result == true) {
+        _loadQuotations();
+      }
+    });
+  }
+
+  void _convertToInvoice(Quotation quotation) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Convert to invoice feature coming soon'),
+        duration: Duration(seconds: 2),
+      ),
+    );
   }
 
   Future<void> _deleteQuotation(Quotation quotation) async {
@@ -447,8 +623,16 @@ class _QuotationsScreenState extends State<QuotationsScreen> {
     );
 
     if (confirm == true && quotation.id != null) {
+      final orgProvider =
+          Provider.of<OrganizationProvider>(context, listen: false);
+
+      if (orgProvider.selectedOrganization == null) return;
+
       try {
-        await _quotationService.deleteQuotation(quotation.id!);
+        await _quotationService.deleteQuotation(
+          quotation.id!,
+          orgProvider.selectedOrganization!.id,
+        );
         _loadQuotations();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(

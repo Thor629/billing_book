@@ -75,7 +75,9 @@ class SalesInvoiceService {
         return SalesInvoice.fromJson(data['invoice']);
       } else {
         final error = json.decode(response.body);
-        throw Exception(error['message'] ?? 'Failed to create invoice');
+        final errorMessage =
+            error['error'] ?? error['message'] ?? 'Failed to create invoice';
+        throw Exception(errorMessage);
       }
     } catch (e) {
       throw Exception('Error creating invoice: $e');

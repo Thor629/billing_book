@@ -131,14 +131,19 @@ class _ItemsScreenEnhancedState extends State<ItemsScreenEnhanced> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Items', style: AppTextStyles.h1),
+                Text('Items',
+                    style: AppTextStyles.h1.copyWith(
+                      color: AppColors.textPrimary,
+                    )),
                 Row(
                   children: [
                     _buildReportsButton(),
                     const SizedBox(width: 8),
                     IconButton(
                       icon: const Icon(Icons.settings_outlined),
-                      onPressed: () {},
+                      onPressed: () {
+                        Navigator.pushNamed(context, '/settings');
+                      },
                       tooltip: 'Settings',
                     ),
                     IconButton(
@@ -215,11 +220,12 @@ class _ItemsScreenEnhancedState extends State<ItemsScreenEnhanced> {
 
                     // Category Filter
                     SizedBox(
-                      width: 200,
+                      width: 220,
                       child: DropdownButtonFormField<String>(
                         value: _selectedCategory,
+                        isExpanded: true,
                         decoration: InputDecoration(
-                          hintText: 'Select Categories',
+                          hintText: 'Category',
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
@@ -231,12 +237,18 @@ class _ItemsScreenEnhancedState extends State<ItemsScreenEnhanced> {
                         items: [
                           const DropdownMenuItem(
                             value: null,
-                            child: Text('All Categories'),
+                            child: Text(
+                              'All Categories',
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                           ...categories.map((category) {
                             return DropdownMenuItem(
                               value: category,
-                              child: Text(category),
+                              child: Text(
+                                category,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             );
                           }),
                         ],
@@ -393,19 +405,38 @@ class _ItemsScreenEnhancedState extends State<ItemsScreenEnhanced> {
                     );
                   }
 
-                  return Card(
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: SingleChildScrollView(
+                  return Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.cardBackground,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.shadowLight,
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: SizedBox(
+                        width: double.infinity,
                         child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: ConstrainedBox(
-                            constraints: BoxConstraints(
-                              minWidth: MediaQuery.of(context).size.width - 300,
-                            ),
+                          scrollDirection: Axis.vertical,
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
                             child: DataTable(
                               showCheckboxColumn: true,
-                              columnSpacing: 40,
+                              columnSpacing: 85,
+                              headingRowHeight: 56,
+                              dataRowMinHeight: 70,
+                              dataRowMaxHeight: 72,
+                              headingRowColor: WidgetStateProperty.all(
+                                  AppColors.tableHeader),
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                    color: AppColors.borderLight, width: 1),
+                              ),
                               columns: [
                                 _buildDataColumn('Item Name', 'item_name'),
                                 _buildDataColumn('Item Code', 'item_code'),
@@ -415,7 +446,13 @@ class _ItemsScreenEnhancedState extends State<ItemsScreenEnhanced> {
                                 _buildDataColumn(
                                     'Purchase Price', 'purchase_price'),
                                 _buildDataColumn('MRP', 'mrp'),
-                                const DataColumn(label: Text('Actions')),
+                                DataColumn(
+                                  label: Text(
+                                    'Actions',
+                                    style: AppTextStyles.tableHeader
+                                        .copyWith(color: Colors.white),
+                                  ),
+                                ),
                               ],
                               rows: filteredItems.map((item) {
                                 final isSelected =
@@ -437,23 +474,32 @@ class _ItemsScreenEnhancedState extends State<ItemsScreenEnhanced> {
                                     DataCell(
                                       Container(
                                         padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 4,
+                                          horizontal: 12,
+                                          vertical: 6,
                                         ),
                                         decoration: BoxDecoration(
                                           color: item.isLowStock
-                                              ? Colors.red[50]
-                                              : Colors.green[50],
+                                              ? AppColors.errorLight
+                                              : AppColors.successLight,
                                           borderRadius:
-                                              BorderRadius.circular(4),
+                                              BorderRadius.circular(20),
+                                          border: Border.all(
+                                            color: item.isLowStock
+                                                ? AppColors.error
+                                                    .withOpacity(0.3)
+                                                : AppColors.success
+                                                    .withOpacity(0.3),
+                                            width: 1,
+                                          ),
                                         ),
                                         child: Text(
                                           '${item.stockQty} ${item.unit}',
                                           style: TextStyle(
                                             color: item.isLowStock
-                                                ? Colors.red[700]
-                                                : Colors.green[700],
-                                            fontWeight: FontWeight.w500,
+                                                ? AppColors.error
+                                                : AppColors.success,
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 12,
                                           ),
                                         ),
                                       ),
@@ -476,9 +522,21 @@ class _ItemsScreenEnhancedState extends State<ItemsScreenEnhanced> {
                                         children: [
                                           IconButton(
                                             icon: const Icon(
+                                              Icons.visibility_outlined,
+                                              size: 18,
+                                            ),
+                                            color: AppColors.neutral600,
+                                            onPressed: () {
+                                              _showItemDetails(item);
+                                            },
+                                            tooltip: 'View',
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(
                                               Icons.edit_outlined,
                                               size: 18,
                                             ),
+                                            color: AppColors.neutral600,
                                             onPressed: () {
                                               Navigator.push(
                                                 context,
@@ -493,12 +551,25 @@ class _ItemsScreenEnhancedState extends State<ItemsScreenEnhanced> {
                                           ),
                                           IconButton(
                                             icon: const Icon(
-                                              Icons.more_vert,
+                                              Icons.content_copy_outlined,
                                               size: 18,
                                             ),
+                                            color: AppColors.neutral600,
                                             onPressed: () {
-                                              _showItemMenu(context, item);
+                                              _duplicateItem(item);
                                             },
+                                            tooltip: 'Duplicate',
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(
+                                              Icons.delete_outline,
+                                              size: 18,
+                                            ),
+                                            color: AppColors.error,
+                                            onPressed: () {
+                                              _deleteItem(item);
+                                            },
+                                            tooltip: 'Delete',
                                           ),
                                         ],
                                       ),
@@ -547,7 +618,10 @@ class _ItemsScreenEnhancedState extends State<ItemsScreenEnhanced> {
 
   DataColumn _buildDataColumn(String label, String columnName) {
     return DataColumn(
-      label: Text(label),
+      label: Text(
+        label,
+        style: AppTextStyles.tableHeader.copyWith(color: Colors.white),
+      ),
       onSort: (columnIndex, ascending) {
         setState(() {
           _sortColumn = columnName;
@@ -563,38 +637,85 @@ class _ItemsScreenEnhancedState extends State<ItemsScreenEnhanced> {
     required IconData icon,
     required Color color,
   }) {
-    return Card(
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            color.withOpacity(0.1),
+            color.withOpacity(0.05),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: color.withOpacity(0.2),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
+                gradient: LinearGradient(
+                  colors: [color, color.withOpacity(0.7)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-              child: Icon(icon, color: color, size: 24),
+              child: Icon(icon, color: Colors.white, size: 28),
             ),
             const SizedBox(width: 16),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.textSecondary,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(value, style: AppTextStyles.h2),
-              ],
+                  const SizedBox(height: 6),
+                  Text(
+                    value,
+                    style: AppTextStyles.metricSmall.copyWith(
+                      color: color,
+                    ),
+                  ),
+                ],
+              ),
             ),
-            const Spacer(),
-            IconButton(
-              icon: const Icon(Icons.open_in_new, size: 18),
-              onPressed: () {},
-              tooltip: 'View Details',
+            Container(
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: IconButton(
+                icon: Icon(Icons.arrow_forward, size: 18, color: color),
+                onPressed: () {},
+                tooltip: 'View Details',
+              ),
             ),
           ],
         ),

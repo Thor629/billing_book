@@ -219,6 +219,7 @@ class SalesReturnController extends Controller
             'total_amount' => 'sometimes|numeric|min:0',
             'amount_paid' => 'nullable|numeric|min:0',
             'payment_mode' => 'nullable|string|max:50',
+            'bank_account_id' => 'nullable|exists:bank_accounts,id',
             'status' => 'sometimes|in:unpaid,refunded',
             'notes' => 'nullable|string',
             'terms_conditions' => 'nullable|string',
@@ -229,6 +230,94 @@ class SalesReturnController extends Controller
         }
 
         try {
+            DB::beginTransaction();
+
+            $oldAmountPaid = $salesReturn->amount_paid;
+            $oldStatus = $salesReturn->status;
+            $organizationId = $salesReturn->organization_id;
+
+            // If amount paid or status changed
+            if ($request->has('amount_paid') || $request->has('status')) {
+                $newAmountPaid = $request->has('amount_paid') ? $request->amount_paid : $oldAmountPaid;
+                $newStatus = $request->has('status') ? $request->status : $oldStatus;
+
+                // Find and reverse old bank transaction if exists
+                if ($oldStatus === 'refunded' && $oldAmountPaid > 0) {
+                    $oldTransaction = BankTransaction::where('description', 'like', "%Sales Return Refund: {$salesReturn->return_number}%")
+                        ->where('organization_id', $organizationId)
+                        ->first();
+
+                    if ($oldTransaction) {
+                        $oldAccount = BankAccount::find($oldTransaction->account_id);
+                        if ($oldAccount) {
+                            // Reverse old transaction (add back the refunded amount)
+                            $oldAccount->increment('current_balance', $oldAmountPaid);
+                        }
+                        $oldTransaction->delete();
+                    }
+                }
+
+                // Create new bank transaction if status is refunded
+                if ($newStatus === 'refunded' && $newAmountPaid > 0) {
+                    $paymentMode = $request->has('payment_mode') ? $request->payment_mode : $salesReturn->payment_mode;
+                    $description = "Sales Return Refund: {$salesReturn->return_number}";
+                    
+                    if ($request->notes) {
+                        $description .= " - {$request->notes}";
+                    }
+
+                    if (strtolower($paymentMode) === 'cash') {
+                        $cashAccount = BankAccount::firstOrCreate(
+                            [
+                                'organization_id' => $organizationId,
+                                'account_name' => 'Cash in Hand',
+                                'account_type' => 'cash',
+                            ],
+                            [
+                                'user_id' => $request->user()->id,
+                                'opening_balance' => 0,
+                                'current_balance' => 0,
+                                'as_of_date' => now(),
+                            ]
+                        );
+
+                        $cashAccount->decrement('current_balance', $newAmountPaid);
+
+                        BankTransaction::create([
+                            'user_id' => $request->user()->id,
+                            'organization_id' => $organizationId,
+                            'account_id' => $cashAccount->id,
+                            'transaction_type' => 'sales_return',
+                            'amount' => $newAmountPaid,
+                            'transaction_date' => $salesReturn->return_date,
+                            'description' => $description,
+                        ]);
+                    } else {
+                        $bankAccountId = $request->has('bank_account_id') ? $request->bank_account_id : null;
+                        
+                        if ($bankAccountId) {
+                            $bankAccount = BankAccount::where('id', $bankAccountId)
+                                ->where('organization_id', $organizationId)
+                                ->first();
+
+                            if ($bankAccount) {
+                                $bankAccount->decrement('current_balance', $newAmountPaid);
+
+                                BankTransaction::create([
+                                    'user_id' => $request->user()->id,
+                                    'organization_id' => $organizationId,
+                                    'account_id' => $bankAccount->id,
+                                    'transaction_type' => 'sales_return',
+                                    'amount' => $newAmountPaid,
+                                    'transaction_date' => $salesReturn->return_date,
+                                    'description' => $description,
+                                ]);
+                            }
+                        }
+                    }
+                }
+            }
+
             $salesReturn->update($request->only([
                 'party_id',
                 'return_date',
@@ -245,12 +334,15 @@ class SalesReturnController extends Controller
                 'terms_conditions',
             ]));
 
+            DB::commit();
+
             return response()->json([
-                'message' => 'Sales return updated successfully',
+                'message' => 'Sales return updated successfully with bank balance adjustment',
                 'return' => $salesReturn->load(['party', 'items.item']),
             ]);
 
         } catch (\Exception $e) {
+            DB::rollBack();
             return response()->json([
                 'message' => 'Failed to update sales return',
                 'error' => $e->getMessage()

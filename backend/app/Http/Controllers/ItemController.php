@@ -166,6 +166,11 @@ class ItemController extends Controller
         $customFields = $validated['custom_fields'] ?? null;
         unset($validated['party_prices'], $validated['custom_fields']);
 
+        // If opening_stock is being updated and stock_qty is not provided, update stock_qty
+        if (isset($validated['opening_stock']) && !isset($validated['stock_qty'])) {
+            $validated['stock_qty'] = (int) $validated['opening_stock'];
+        }
+
         $item->update($validated);
 
         // Update party prices if provided

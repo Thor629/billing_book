@@ -6,9 +6,17 @@ import '../../services/party_service.dart';
 import '../../models/party_model.dart';
 import '../../providers/organization_provider.dart';
 import '../../core/constants/app_colors.dart';
+import '../../widgets/dialog_scaffold.dart';
 
 class CreateExpenseScreen extends StatefulWidget {
-  const CreateExpenseScreen({super.key});
+  final int? expenseId;
+  final Map<String, dynamic>? expenseData;
+
+  const CreateExpenseScreen({
+    super.key,
+    this.expenseId,
+    this.expenseData,
+  });
 
   @override
   State<CreateExpenseScreen> createState() => _CreateExpenseScreenState();
@@ -44,6 +52,9 @@ class _CreateExpenseScreenState extends State<CreateExpenseScreen> {
     return _items.fold(0.0, (sum, item) => sum + item.amount);
   }
 
+  bool get _isEditMode =>
+      widget.expenseId != null || widget.expenseData != null;
+
   @override
   void initState() {
     super.initState();
@@ -72,6 +83,21 @@ class _CreateExpenseScreenState extends State<CreateExpenseScreen> {
       final categories = await _expenseService.getCategories();
       setState(() {
         _categories = categories;
+
+        // Load existing expense data if in edit mode
+        if (widget.expenseData != null) {
+          _expenseNumberController.text =
+              widget.expenseData!['expense_number'] ??
+                  _expenseNumberController.text;
+          _selectedPartyId = widget.expenseData!['party_id'];
+          _selectedPartyName = widget.expenseData!['party_name'];
+          _selectedCategory = widget.expenseData!['category'];
+          _paymentMode = widget.expenseData!['payment_mode'] ?? 'Cash';
+          _notesController.text = widget.expenseData!['notes'] ?? '';
+          if (widget.expenseData!['expense_date'] != null) {
+            _expenseDate = DateTime.parse(widget.expenseData!['expense_date']);
+          }
+        }
       });
     } catch (e) {
       print('Error loading initial data: $e');
@@ -264,15 +290,24 @@ class _CreateExpenseScreenState extends State<CreateExpenseScreen> {
             .toList(),
       };
 
-      await _expenseService.createExpense(expenseData);
-
-      if (mounted) {
-        Navigator.pop(context, true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content:
-                  Text('Expense created and balance updated successfully')),
-        );
+      if (_isEditMode && widget.expenseId != null) {
+        await _expenseService.updateExpense(widget.expenseId!, expenseData);
+        if (mounted) {
+          Navigator.pop(context, true);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Expense updated successfully')),
+          );
+        }
+      } else {
+        await _expenseService.createExpense(expenseData);
+        if (mounted) {
+          Navigator.pop(context, true);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content:
+                    Text('Expense created and balance updated successfully')),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -289,49 +324,13 @@ class _CreateExpenseScreenState extends State<CreateExpenseScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Create Expense',
-          style: TextStyle(color: Colors.black, fontSize: 18),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_outlined, color: Colors.black),
-            onPressed: () {},
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          const SizedBox(width: 8),
-          ElevatedButton(
-            onPressed: _isSaving ? null : _saveExpense,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryDark,
-              foregroundColor: Colors.white,
-            ),
-            child: _isSaving
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
-                : const Text('Save'),
-          ),
-          const SizedBox(width: 16),
-        ],
-      ),
+    return DialogScaffold(
+      title: _isEditMode ? 'Edit Expense' : 'Create Expense',
+      onSave: _saveExpense,
+      onSettings: () {
+        Navigator.pushNamed(context, '/settings');
+      },
+      isSaving: _isSaving,
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(24),

@@ -23,6 +23,7 @@ dependencies:
   # UI & Design
   google_fonts: ^6.1.0
   flutter_screenutil: ^5.9.0
+  random_color: ^1.0.6-nullsafety
 
   # Icons
   cupertino_icons: ^1.0.2

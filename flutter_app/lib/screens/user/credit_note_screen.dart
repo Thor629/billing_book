@@ -5,6 +5,7 @@ import '../../core/constants/app_text_styles.dart';
 import '../../models/credit_note_model.dart';
 import '../../services/credit_note_service.dart';
 import '../../providers/organization_provider.dart';
+import '../../widgets/unified_data_table.dart';
 import 'create_credit_note_screen.dart';
 
 class CreditNoteScreen extends StatefulWidget {
@@ -73,6 +74,89 @@ class _CreditNoteScreenState extends State<CreditNoteScreen> {
     }
   }
 
+  void _viewCreditNote(CreditNote creditNote) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Credit Note ${creditNote.creditNoteNumber}'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildDetailRow('Customer', creditNote.partyName ?? 'N/A'),
+              _buildDetailRow(
+                'Date',
+                '${creditNote.creditNoteDate.day.toString().padLeft(2, '0')} ${_getMonthName(creditNote.creditNoteDate.month)} ${creditNote.creditNoteDate.year}',
+              ),
+              _buildDetailRow('Invoice', creditNote.invoiceNumber ?? 'N/A'),
+              _buildDetailRow(
+                'Amount',
+                '₹${creditNote.totalAmount.toStringAsFixed(2)}',
+              ),
+              _buildDetailRow(
+                'Amount Received',
+                '₹${creditNote.amountReceived.toStringAsFixed(2)}',
+              ),
+              _buildDetailRow('Payment Mode', creditNote.paymentMode ?? 'N/A'),
+              _buildDetailRow('Status', creditNote.status),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              '$label:',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+          Expanded(child: Text(value)),
+        ],
+      ),
+    );
+  }
+
+  void _editCreditNote(CreditNote creditNote) async {
+    final result = await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => CreateCreditNoteScreen(
+        creditNoteId: creditNote.id,
+        creditNoteData: {
+          'credit_note_number': creditNote.creditNoteNumber,
+          'party_id': creditNote.partyId,
+          'party_name': creditNote.partyName,
+          'invoice_number': creditNote.invoiceNumber,
+          'credit_note_date': creditNote.creditNoteDate.toIso8601String(),
+          'total_amount': creditNote.totalAmount,
+          'amount_received': creditNote.amountReceived,
+          'payment_mode': creditNote.paymentMode,
+          'status': creditNote.status,
+        },
+      ),
+    );
+
+    if (result == true) {
+      _loadCreditNotes();
+    }
+  }
+
   void _showDeleteDialog(CreditNote creditNote) {
     showDialog(
       context: context,
@@ -122,18 +206,17 @@ class _CreditNoteScreenState extends State<CreditNoteScreen> {
               Text('Credit Note', style: AppTextStyles.h1),
               ElevatedButton(
                 onPressed: () async {
-                  final result = await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const CreateCreditNoteScreen(),
-                    ),
+                  final result = await showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (context) => const CreateCreditNoteScreen(),
                   );
                   if (result == true) {
                     _loadCreditNotes();
                   }
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.purple[700],
+                  backgroundColor: Colors.black,
                   foregroundColor: Colors.white,
                   padding:
                       const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -182,73 +265,50 @@ class _CreditNoteScreenState extends State<CreditNoteScreen> {
                 ? const Center(child: CircularProgressIndicator())
                 : _creditNotes.isEmpty
                     ? const Center(child: Text('No credit notes found'))
-                    : Card(
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: DataTable(
-                            columns: const [
-                              DataColumn(label: Text('Date')),
-                              DataColumn(label: Text('Credit Note Number')),
-                              DataColumn(label: Text('Party Name')),
-                              DataColumn(label: Text('Invoice No')),
-                              DataColumn(label: Text('Amount')),
-                              DataColumn(label: Text('Amount Received')),
-                              DataColumn(label: Text('Payment Mode')),
-                              DataColumn(label: Text('Status')),
-                              DataColumn(label: Text('Actions')),
-                            ],
-                            rows: _creditNotes.map((creditNote) {
-                              return DataRow(cells: [
-                                DataCell(Text(
-                                    '${creditNote.creditNoteDate.day.toString().padLeft(2, '0')} ${_getMonthName(creditNote.creditNoteDate.month)} ${creditNote.creditNoteDate.year}')),
-                                DataCell(Text(creditNote.creditNoteNumber)),
-                                DataCell(Text(creditNote.partyName ?? '-')),
-                                DataCell(Text(creditNote.invoiceNumber ?? '-')),
-                                DataCell(Text(
-                                    '₹ ${creditNote.totalAmount.toStringAsFixed(2)}')),
-                                DataCell(Text(
-                                    '₹ ${creditNote.amountReceived.toStringAsFixed(2)}')),
-                                DataCell(Text(creditNote.paymentMode ?? '-')),
-                                DataCell(
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: creditNote.status == 'applied'
-                                          ? Colors.green[50]
-                                          : creditNote.status == 'issued'
-                                              ? Colors.blue[50]
-                                              : Colors.grey[50],
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      creditNote.status == 'applied'
-                                          ? 'Applied'
-                                          : creditNote.status == 'issued'
-                                              ? 'Issued'
-                                              : 'Draft',
-                                      style: TextStyle(
-                                        color: creditNote.status == 'applied'
-                                            ? Colors.green[700]
-                                            : creditNote.status == 'issued'
-                                                ? Colors.blue[700]
-                                                : Colors.grey[700],
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                DataCell(
-                                  IconButton(
-                                    icon: const Icon(Icons.more_vert),
-                                    onPressed: () =>
-                                        _showDeleteDialog(creditNote),
-                                  ),
-                                ),
-                              ]);
-                            }).toList(),
-                          ),
-                        ),
+                    : UnifiedDataTable(
+                        columns: const [
+                          DataColumn(label: TableHeader('Date')),
+                          DataColumn(label: TableHeader('Credit Note Number')),
+                          DataColumn(label: TableHeader('Party Name')),
+                          DataColumn(label: TableHeader('Invoice No')),
+                          DataColumn(label: TableHeader('Amount')),
+                          DataColumn(label: TableHeader('Amount Received')),
+                          DataColumn(label: TableHeader('Payment Mode')),
+                          DataColumn(label: TableHeader('Status')),
+                          DataColumn(label: TableHeader('Actions')),
+                        ],
+                        rows: _creditNotes.map((creditNote) {
+                          return DataRow(cells: [
+                            DataCell(TableCellText(
+                                '${creditNote.creditNoteDate.day.toString().padLeft(2, '0')} ${_getMonthName(creditNote.creditNoteDate.month)} ${creditNote.creditNoteDate.year}')),
+                            DataCell(
+                                TableCellText(creditNote.creditNoteNumber)),
+                            DataCell(
+                                TableCellText(creditNote.partyName ?? '-')),
+                            DataCell(
+                                TableCellText(creditNote.invoiceNumber ?? '-')),
+                            DataCell(TableCellText(
+                                '₹ ${creditNote.totalAmount.toStringAsFixed(2)}')),
+                            DataCell(TableCellText(
+                                '₹ ${creditNote.amountReceived.toStringAsFixed(2)}')),
+                            DataCell(
+                                TableCellText(creditNote.paymentMode ?? '-')),
+                            DataCell(TableStatusBadge(
+                              creditNote.status == 'applied'
+                                  ? 'Applied'
+                                  : creditNote.status == 'issued'
+                                      ? 'Issued'
+                                      : 'Draft',
+                            )),
+                            DataCell(
+                              TableActionButtons(
+                                onView: () => _viewCreditNote(creditNote),
+                                onEdit: () => _editCreditNote(creditNote),
+                                onDelete: () => _showDeleteDialog(creditNote),
+                              ),
+                            ),
+                          ]);
+                        }).toList(),
                       ),
           ),
         ],

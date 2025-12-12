@@ -44,43 +44,84 @@ class _UserDashboardState extends State<UserDashboard> {
       backgroundColor: AppColors.background,
       body: Row(
         children: [
-          // Sidebar
+          // Sidebar - Soft Blue Theme
           Container(
-            width: 240,
-            color: AppColors.primaryDark,
+            width: 260,
+            decoration: BoxDecoration(
+              color: AppColors.sidebarBackground,
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.shadowLight,
+                  blurRadius: 15,
+                  offset: const Offset(2, 0),
+                ),
+              ],
+            ),
             child: Column(
               children: [
-                // Logo/Header
+                // Logo/Header - Warm Orange Gradient
                 Container(
                   padding: const EdgeInsets.all(24),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Color(0xFFFFB347), // Warm orange
+                        Color(0xFFFFCC80), // Light orange
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.only(
+                      bottomLeft: Radius.circular(24),
+                      bottomRight: Radius.circular(24),
+                    ),
+                  ),
                   child: Column(
                     children: [
-                      const CircleAvatar(
-                        radius: 30,
-                        backgroundColor: AppColors.primaryLight,
-                        child: Icon(
-                          Icons.person,
-                          color: AppColors.textLight,
-                          size: 30,
+                      Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.5),
+                            width: 3,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: const CircleAvatar(
+                          radius: 32,
+                          backgroundColor: Colors.white,
+                          child: Icon(
+                            Icons.person,
+                            color: Color(0xFFFF9F43),
+                            size: 32,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 12),
                       Text(
                         authProvider.user?.name ?? 'User',
-                        style: AppTextStyles.h3.copyWith(
-                          color: AppColors.textLight,
+                        style: AppTextStyles.h4.copyWith(
+                          color: Colors.white,
                         ),
                       ),
+                      const SizedBox(height: 4),
                       Text(
                         authProvider.user?.email ?? '',
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: AppColors.textLight.withValues(alpha: 0.7),
+                          color: Colors.white.withValues(alpha: 0.9),
                         ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
                 ),
-                const Divider(color: AppColors.primaryLight),
+                const SizedBox(height: 8),
 
                 // Menu Items - Scrollable
                 Expanded(
@@ -253,10 +294,8 @@ class _UserDashboardState extends State<UserDashboard> {
                           padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
                           child: Text(
                             'ACCOUNTING SOLUTIONS',
-                            style: AppTextStyles.bodySmall.copyWith(
-                              color: AppColors.textLight.withValues(alpha: 0.6),
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1.2,
+                            style: AppTextStyles.overline.copyWith(
+                              color: AppColors.sidebarTextMuted,
                             ),
                           ),
                         ),
@@ -298,10 +337,8 @@ class _UserDashboardState extends State<UserDashboard> {
                           padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
                           child: Text(
                             'BUSINESS TOOLS',
-                            style: AppTextStyles.bodySmall.copyWith(
-                              color: AppColors.textLight.withValues(alpha: 0.6),
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1.2,
+                            style: AppTextStyles.overline.copyWith(
+                              color: AppColors.sidebarTextMuted,
                             ),
                           ),
                         ),
@@ -364,25 +401,50 @@ class _UserDashboardState extends State<UserDashboard> {
 
                 // Logout
                 Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: ListTile(
-                    leading: const Icon(
-                      Icons.logout,
-                      color: AppColors.textLight,
+                  padding: const EdgeInsets.all(12),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.error.withOpacity(0.1),
+                      border: Border.all(
+                        color: AppColors.error.withOpacity(0.3),
+                        width: 1,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    title: Text(
-                      'Logout',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: AppColors.textLight,
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () async {
+                          // Clear organization data on logout
+                          await Provider.of<OrganizationProvider>(context,
+                                  listen: false)
+                              .clearOrganization();
+                          await authProvider.logout();
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        hoverColor: AppColors.error.withOpacity(0.2),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.logout_rounded,
+                                color: AppColors.error,
+                                size: 22,
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                'Logout',
+                                style: AppTextStyles.buttonMedium.copyWith(
+                                  color: AppColors.error,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
-                    onTap: () async {
-                      // Clear organization data on logout
-                      await Provider.of<OrganizationProvider>(context,
-                              listen: false)
-                          .clearOrganization();
-                      await authProvider.logout();
-                    },
                   ),
                 ),
               ],
@@ -591,24 +653,58 @@ class _UserDashboardState extends State<UserDashboard> {
     bool isActive = false,
     VoidCallback? onTap,
   }) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: isActive ? AppColors.primaryLight : Colors.transparent,
-        borderRadius: BorderRadius.circular(6),
+        color: isActive ? AppColors.sidebarActiveLight : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        border: isActive
+            ? Border.all(color: AppColors.sidebarActiveOrange, width: 1.5)
+            : null,
       ),
-      child: ListTile(
-        leading: Icon(
-          icon,
-          color: AppColors.textLight,
-        ),
-        title: Text(
-          label,
-          style: AppTextStyles.bodyMedium.copyWith(
-            color: AppColors.textLight,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          hoverColor: AppColors.sidebarHover,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  color: isActive
+                      ? AppColors.sidebarActiveOrange
+                      : AppColors.sidebarText,
+                  size: 22,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: AppTextStyles.menuItem.copyWith(
+                      color: isActive
+                          ? AppColors.sidebarActiveOrange
+                          : AppColors.sidebarText,
+                      fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+                    ),
+                  ),
+                ),
+                if (isActive)
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: AppColors.sidebarActiveOrange,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
-        onTap: onTap,
       ),
     );
   }
@@ -622,31 +718,61 @@ class _UserDashboardState extends State<UserDashboard> {
   }) {
     return Column(
       children: [
-        Container(
-          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
           decoration: BoxDecoration(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(6),
+            color: isExpanded ? AppColors.sidebarHover : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
           ),
-          child: ListTile(
-            leading: Icon(
-              icon,
-              color: AppColors.textLight,
-            ),
-            title: Text(
-              label,
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: AppColors.textLight,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(12),
+              hoverColor: AppColors.sidebarHover,
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(
+                  children: [
+                    Icon(
+                      icon,
+                      color: AppColors.sidebarText,
+                      size: 22,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        label,
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.sidebarText,
+                          fontWeight:
+                              isExpanded ? FontWeight.w600 : FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    AnimatedRotation(
+                      turns: isExpanded ? 0.5 : 0,
+                      duration: const Duration(milliseconds: 200),
+                      child: Icon(
+                        Icons.keyboard_arrow_down,
+                        color: AppColors.sidebarText,
+                        size: 20,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-            trailing: Icon(
-              isExpanded ? Icons.expand_less : Icons.expand_more,
-              color: AppColors.textLight,
-            ),
-            onTap: onTap,
           ),
         ),
-        if (isExpanded) ...children,
+        AnimatedSize(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+          child:
+              isExpanded ? Column(children: children) : const SizedBox.shrink(),
+        ),
       ],
     );
   }
@@ -656,21 +782,52 @@ class _UserDashboardState extends State<UserDashboard> {
     bool isActive = false,
     VoidCallback? onTap,
   }) {
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
       margin: const EdgeInsets.only(left: 24, right: 8, top: 2, bottom: 2),
       decoration: BoxDecoration(
-        color: isActive ? AppColors.primaryLight : Colors.transparent,
-        borderRadius: BorderRadius.circular(6),
+        color: isActive ? AppColors.sidebarActiveLight : Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
+        border: isActive
+            ? Border.all(color: AppColors.sidebarActiveOrange, width: 1)
+            : null,
       ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.only(left: 48, right: 16),
-        title: Text(
-          label,
-          style: AppTextStyles.bodyMedium.copyWith(
-            color: AppColors.textLight,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          hoverColor: AppColors.sidebarHover,
+          child: Padding(
+            padding:
+                const EdgeInsets.only(left: 48, right: 16, top: 10, bottom: 10),
+            child: Row(
+              children: [
+                if (isActive)
+                  Container(
+                    width: 6,
+                    height: 6,
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: const BoxDecoration(
+                      color: AppColors.sidebarActiveOrange,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: AppTextStyles.labelMedium.copyWith(
+                      color: isActive
+                          ? AppColors.sidebarActiveOrange
+                          : AppColors.sidebarText,
+                      fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
-        onTap: onTap,
       ),
     );
   }

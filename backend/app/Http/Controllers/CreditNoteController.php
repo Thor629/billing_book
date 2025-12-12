@@ -166,10 +166,16 @@ class CreditNoteController extends Controller
 
     public function update(Request $request, $id)
     {
+        \Log::info('Credit Note Update Request:', [
+            'id' => $id,
+            'body' => $request->all(),
+        ]);
+
         $creditNote = CreditNote::findOrFail($id);
 
         $validator = Validator::make($request->all(), [
             'party_id' => 'sometimes|exists:parties,id',
+            'credit_note_number' => 'sometimes|string|max:50', // Allow but don't validate uniqueness
             'credit_note_date' => 'sometimes|date',
             'invoice_number' => 'nullable|string|max:50',
             'sales_invoice_id' => 'nullable|exists:sales_invoices,id',
@@ -177,6 +183,9 @@ class CreditNoteController extends Controller
             'discount' => 'nullable|numeric|min:0',
             'tax' => 'nullable|numeric|min:0',
             'total_amount' => 'sometimes|numeric|min:0',
+            'amount_received' => 'nullable|numeric|min:0',
+            'payment_mode' => 'nullable|string|max:50',
+            'bank_account_id' => 'nullable|exists:bank_accounts,id',
             'status' => 'sometimes|in:draft,issued,applied',
             'reason' => 'nullable|string',
             'notes' => 'nullable|string',
@@ -184,21 +193,129 @@ class CreditNoteController extends Controller
         ]);
 
         if ($validator->fails()) {
+            \Log::error('Credit Note Update Validation Failed:', [
+                'errors' => $validator->errors(),
+            ]);
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
         try {
-            $creditNote->update($request->only([
+            DB::beginTransaction();
+
+            $oldAmountReceived = $creditNote->amount_received;
+            $organizationId = $creditNote->organization_id;
+
+            // If amount received is being updated
+            if ($request->has('amount_received')) {
+                $newAmountReceived = $request->amount_received;
+
+                // Find and reverse old bank transaction
+                if ($oldAmountReceived > 0) {
+                    $oldTransaction = BankTransaction::where('description', 'like', "%Credit Note Payment: {$creditNote->credit_note_number}%")
+                        ->where('organization_id', $organizationId)
+                        ->first();
+
+                    if ($oldTransaction) {
+                        $oldAccount = BankAccount::find($oldTransaction->account_id);
+                        if ($oldAccount) {
+                            // Reverse old transaction (subtract the old amount)
+                            $oldAccount->decrement('current_balance', $oldAmountReceived);
+                        }
+                        $oldTransaction->delete();
+                    }
+                }
+
+                // Create new bank transaction if amount received
+                if ($newAmountReceived > 0) {
+                    $paymentMode = $request->has('payment_mode') ? strtolower($request->payment_mode) : strtolower($creditNote->payment_mode ?? 'cash');
+                    $description = "Credit Note Payment: {$creditNote->credit_note_number}";
+                    
+                    if ($request->notes) {
+                        $description .= " - {$request->notes}";
+                    }
+
+                    if ($paymentMode === 'cash') {
+                        $cashAccount = BankAccount::firstOrCreate(
+                            [
+                                'organization_id' => $organizationId,
+                                'account_name' => 'Cash in Hand',
+                                'account_type' => 'cash',
+                            ],
+                            [
+                                'user_id' => $request->user()->id,
+                                'opening_balance' => 0,
+                                'current_balance' => 0,
+                                'as_of_date' => now(),
+                            ]
+                        );
+
+                        $cashAccount->increment('current_balance', $newAmountReceived);
+
+                        BankTransaction::create([
+                            'user_id' => $request->user()->id,
+                            'organization_id' => $organizationId,
+                            'account_id' => $cashAccount->id,
+                            'transaction_type' => 'credit_note',
+                            'amount' => $newAmountReceived,
+                            'transaction_date' => $creditNote->credit_note_date,
+                            'description' => $description,
+                        ]);
+                    } else {
+                        $bankAccountId = $request->has('bank_account_id') ? $request->bank_account_id : $creditNote->bank_account_id;
+                        
+                        if ($bankAccountId) {
+                            $bankAccount = BankAccount::where('id', $bankAccountId)
+                                ->where('organization_id', $organizationId)
+                                ->first();
+
+                            if ($bankAccount) {
+                                $bankAccount->increment('current_balance', $newAmountReceived);
+
+                                BankTransaction::create([
+                                    'user_id' => $request->user()->id,
+                                    'organization_id' => $organizationId,
+                                    'account_id' => $bankAccount->id,
+                                    'transaction_type' => 'credit_note',
+                                    'amount' => $newAmountReceived,
+                                    'transaction_date' => $creditNote->credit_note_date,
+                                    'description' => $description,
+                                ]);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Don't update credit_note_number - it should remain the same
+            $updateData = $request->only([
                 'party_id', 'credit_note_date', 'invoice_number', 'sales_invoice_id',
-                'subtotal', 'discount', 'tax', 'total_amount', 'status', 'reason', 'notes', 'terms_conditions',
-            ]));
+                'subtotal', 'discount', 'tax', 'total_amount', 'amount_received', 'payment_mode', 
+                'bank_account_id', 'status', 'reason', 'notes', 'terms_conditions',
+            ]);
+
+            // Remove credit_note_number if it was sent (shouldn't be changed)
+            unset($updateData['credit_note_number']);
+
+            $creditNote->update($updateData);
+
+            DB::commit();
+
+            \Log::info('Credit Note Updated Successfully:', [
+                'id' => $id,
+                'credit_note_number' => $creditNote->credit_note_number,
+            ]);
 
             return response()->json([
-                'message' => 'Credit note updated successfully',
+                'message' => 'Credit note updated successfully with bank balance adjustment',
                 'credit_note' => $creditNote->load(['party', 'items.item']),
             ]);
 
         } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Credit Note Update Failed:', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
             return response()->json(['message' => 'Failed to update credit note', 'error' => $e->getMessage()], 500);
         }
     }

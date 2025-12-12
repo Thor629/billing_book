@@ -5,6 +5,7 @@ import '../../models/delivery_challan_model.dart';
 import '../../services/delivery_challan_service.dart';
 import '../../providers/organization_provider.dart';
 import '../../core/constants/app_colors.dart';
+import '../../widgets/unified_data_table.dart';
 import 'create_delivery_challan_screen.dart';
 
 class DeliveryChallanScreen extends StatefulWidget {
@@ -87,7 +88,9 @@ class _DeliveryChallanScreenState extends State<DeliveryChallanScreen> {
                 const Spacer(),
                 IconButton(
                   icon: const Icon(Icons.settings_outlined),
-                  onPressed: () {},
+                  onPressed: () {
+                    Navigator.pushNamed(context, '/settings');
+                  },
                 ),
                 IconButton(
                   icon: const Icon(Icons.grid_view),
@@ -204,12 +207,10 @@ class _DeliveryChallanScreenState extends State<DeliveryChallanScreen> {
                 // Create Button
                 ElevatedButton(
                   onPressed: () async {
-                    final result = await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) =>
-                            const CreateDeliveryChallanScreen(),
-                      ),
+                    final result = await showDialog(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (context) => const CreateDeliveryChallanScreen(),
                     );
                     if (result == true) {
                       _loadChallans();
@@ -254,76 +255,174 @@ class _DeliveryChallanScreenState extends State<DeliveryChallanScreen> {
                           ],
                         ),
                       )
-                    : SingleChildScrollView(
-                        child: DataTable(
-                          headingRowColor: WidgetStateProperty.all(
-                            Colors.grey[100],
-                          ),
-                          columns: const [
-                            DataColumn(label: Text('Date')),
-                            DataColumn(label: Text('Delivery Challan Number')),
-                            DataColumn(label: Text('Party Name')),
-                            DataColumn(label: Text('Amount')),
-                            DataColumn(label: Text('Status')),
-                          ],
-                          rows: _challans
-                              .map(
-                                (challan) => DataRow(
-                                  cells: [
-                                    DataCell(
-                                      Text(
-                                        DateFormat('dd MMM yyyy')
-                                            .format(challan.challanDate),
-                                      ),
+                    : UnifiedDataTable(
+                        columns: const [
+                          DataColumn(label: TableHeader('Date')),
+                          DataColumn(
+                              label: TableHeader('Delivery Challan Number')),
+                          DataColumn(label: TableHeader('Party Name')),
+                          DataColumn(label: TableHeader('Amount')),
+                          DataColumn(label: TableHeader('Status')),
+                          DataColumn(label: TableHeader('Actions')),
+                        ],
+                        rows: _challans
+                            .map(
+                              (challan) => DataRow(
+                                cells: [
+                                  DataCell(TableCellText(
+                                    DateFormat('dd MMM yyyy')
+                                        .format(challan.challanDate),
+                                  )),
+                                  DataCell(
+                                      TableCellText(challan.challanNumber)),
+                                  DataCell(TableCellText(
+                                      challan.party?.name ?? '-')),
+                                  DataCell(
+                                      TableAmount(amount: challan.totalAmount)),
+                                  DataCell(TableStatusBadge(challan.status)),
+                                  DataCell(
+                                    TableActionButtons(
+                                      onView: () => _viewChallan(challan),
+                                      onEdit: () => _editChallan(challan),
+                                      onDelete: () => _deleteChallan(challan),
                                     ),
-                                    DataCell(
-                                      Text(challan.challanNumber),
-                                    ),
-                                    DataCell(
-                                      Text(challan.party?.name ?? '-'),
-                                    ),
-                                    DataCell(
-                                      Text(
-                                        '₹${NumberFormat('#,##,###.##').format(challan.totalAmount)}',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                    DataCell(
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 4,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: challan.status == 'open'
-                                              ? Colors.green[50]
-                                              : Colors.grey[200],
-                                          borderRadius:
-                                              BorderRadius.circular(12),
-                                        ),
-                                        child: Text(
-                                          challan.status.toUpperCase(),
-                                          style: TextStyle(
-                                            color: challan.status == 'open'
-                                                ? Colors.green[700]
-                                                : Colors.grey[700],
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              )
-                              .toList(),
-                        ),
+                                  ),
+                                ],
+                              ),
+                            )
+                            .toList(),
                       ),
           ),
         ],
       ),
     );
+  }
+
+  void _viewChallan(DeliveryChallan challan) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delivery Challan ${challan.challanNumber}'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildDetailRow('Party', challan.party?.name ?? 'N/A'),
+              _buildDetailRow(
+                'Date',
+                DateFormat('dd MMM yyyy').format(challan.challanDate),
+              ),
+              _buildDetailRow(
+                'Amount',
+                '₹${challan.totalAmount.toStringAsFixed(2)}',
+              ),
+              _buildDetailRow('Status', challan.status),
+              if (challan.notes != null && challan.notes!.isNotEmpty)
+                _buildDetailRow('Notes', challan.notes!),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              '$label:',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+          Expanded(child: Text(value)),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _editChallan(DeliveryChallan challan) async {
+    final result = await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => CreateDeliveryChallanScreen(
+        challanId: challan.id,
+        challanData: {
+          'challan_number': challan.challanNumber,
+          'party_id': challan.party?.id,
+          'party_name': challan.party?.name,
+          'challan_date': challan.challanDate.toIso8601String(),
+          'total_amount': challan.totalAmount,
+          'status': challan.status,
+          'notes': challan.notes,
+        },
+      ),
+    );
+
+    if (result == true) {
+      _loadChallans();
+    }
+  }
+
+  Future<void> _deleteChallan(DeliveryChallan challan) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Delivery Challan'),
+        content: Text(
+          'Are you sure you want to delete challan ${challan.challanNumber}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && mounted) {
+      try {
+        final orgProvider =
+            Provider.of<OrganizationProvider>(context, listen: false);
+        await _challanService.deleteDeliveryChallan(challan.id!);
+        _loadChallans();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Delivery challan deleted successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error deleting challan: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
   }
 }

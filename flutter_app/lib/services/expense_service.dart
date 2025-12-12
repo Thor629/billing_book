@@ -110,6 +110,23 @@ class ExpenseService {
     }
   }
 
+  Future<Expense> updateExpense(
+      int id, Map<String, dynamic> expenseData) async {
+    try {
+      final response = await _apiClient.put('/expenses/$id', expenseData);
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return Expense.fromJson(data['expense']);
+      } else {
+        final error = json.decode(response.body);
+        throw Exception(error['message'] ?? 'Failed to update expense');
+      }
+    } catch (e) {
+      throw Exception('Error updating expense: $e');
+    }
+  }
+
   Future<void> deleteExpense(int id) async {
     try {
       final response = await _apiClient.delete('/expenses/$id');

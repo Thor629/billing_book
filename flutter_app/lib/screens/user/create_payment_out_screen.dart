@@ -8,9 +8,17 @@ import '../../providers/auth_provider.dart';
 import '../../models/party_model.dart';
 import '../../models/bank_account_model.dart';
 import '../../core/constants/app_colors.dart';
+import '../../widgets/dialog_scaffold.dart';
 
 class CreatePaymentOutScreen extends StatefulWidget {
-  const CreatePaymentOutScreen({super.key});
+  final int? paymentId;
+  final Map<String, dynamic>? paymentData;
+
+  const CreatePaymentOutScreen({
+    super.key,
+    this.paymentId,
+    this.paymentData,
+  });
 
   @override
   State<CreatePaymentOutScreen> createState() => _CreatePaymentOutScreenState();
@@ -92,6 +100,8 @@ class _CreatePaymentOutScreenState extends State<CreatePaymentOutScreen> {
         orgProvider.selectedOrganization!.id.toString(),
       );
 
+      debugPrint('🔢 Loaded next payment number: $nextNumber');
+
       setState(() {
         _parties = parties
             .where((p) => p.partyType == 'vendor' || p.partyType == 'both')
@@ -99,7 +109,29 @@ class _CreatePaymentOutScreenState extends State<CreatePaymentOutScreen> {
         _bankAccounts = accounts;
         _paymentNumber = nextNumber;
         _isLoading = false;
+
+        // Load existing payment data if in edit mode
+        if (widget.paymentData != null) {
+          debugPrint('🔄 Loading existing payment data: ${widget.paymentData}');
+          _paymentNumber =
+              widget.paymentData!['payment_number'] ?? _paymentNumber;
+          _selectedPartyId = widget.paymentData!['party_id'];
+          _amountController.text =
+              widget.paymentData!['amount']?.toString() ?? '';
+          _paymentMethod = widget.paymentData!['payment_method'] ?? 'cash';
+          _selectedBankAccountId = widget.paymentData!['bank_account_id'];
+          _referenceController.text =
+              widget.paymentData!['reference_number'] ?? '';
+          _notesController.text = widget.paymentData!['notes'] ?? '';
+          if (widget.paymentData!['payment_date'] != null) {
+            _paymentDate = DateTime.parse(widget.paymentData!['payment_date']);
+          }
+          debugPrint(
+              '✅ Loaded existing payment - Party ID: $_selectedPartyId, Amount: ${_amountController.text}');
+        }
       });
+
+      debugPrint('✅ Payment number set in state: $_paymentNumber');
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
@@ -109,6 +141,9 @@ class _CreatePaymentOutScreenState extends State<CreatePaymentOutScreen> {
       }
     }
   }
+
+  bool get _isEditMode =>
+      widget.paymentId != null || widget.paymentData != null;
 
   Future<void> _savePayment() async {
     if (!_formKey.currentState!.validate()) return;
@@ -150,16 +185,32 @@ class _CreatePaymentOutScreenState extends State<CreatePaymentOutScreen> {
         if (_notesController.text.isNotEmpty) 'notes': _notesController.text,
       };
 
-      await _paymentOutService.createPaymentOut(paymentData);
-
-      if (mounted) {
-        Navigator.pop(context, true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content:
-                Text('Payment out created and balance updated successfully'),
-          ),
+      if (_isEditMode && widget.paymentId != null) {
+        // Update existing payment
+        await _paymentOutService.updatePaymentOut(
+          widget.paymentId!,
+          paymentData,
         );
+        if (mounted) {
+          Navigator.pop(context, true);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Payment out updated successfully'),
+            ),
+          );
+        }
+      } else {
+        // Create new payment
+        await _paymentOutService.createPaymentOut(paymentData);
+        if (mounted) {
+          Navigator.pop(context, true);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content:
+                  Text('Payment out created and balance updated successfully'),
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -176,37 +227,10 @@ class _CreatePaymentOutScreenState extends State<CreatePaymentOutScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Create Payment Out'),
-        backgroundColor: AppColors.primaryDark,
-        foregroundColor: Colors.white,
-        actions: [
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: ElevatedButton.icon(
-              onPressed: _isSaving ? null : _savePayment,
-              icon: _isSaving
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    )
-                  : const Icon(Icons.save, size: 18),
-              label: Text(_isSaving ? 'Saving...' : 'Save'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              ),
-            ),
-          ),
-        ],
-      ),
+    return DialogScaffold(
+      title: _isEditMode ? 'Edit Payment Out' : 'Create Payment Out',
+      onSave: _savePayment,
+      isSaving: _isSaving,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
@@ -218,12 +242,17 @@ class _CreatePaymentOutScreenState extends State<CreatePaymentOutScreen> {
                   children: [
                     // Payment Number
                     TextFormField(
+                      key: ValueKey(_paymentNumber),
                       initialValue: _paymentNumber,
                       decoration: const InputDecoration(
                         labelText: 'Payment Number',
                         border: OutlineInputBorder(),
                       ),
                       enabled: false,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
                     ),
                     const SizedBox(height: 16),
 

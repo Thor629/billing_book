@@ -10,6 +10,8 @@ import '../../services/bank_account_service.dart';
 import '../../services/quotation_service.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/organization_provider.dart';
+import '../../utils/barcode_scanner.dart';
+import '../../widgets/dialog_scaffold.dart';
 
 class QuotationItem {
   final ItemModel item;
@@ -35,7 +37,14 @@ class QuotationItem {
 }
 
 class CreateQuotationScreen extends StatefulWidget {
-  const CreateQuotationScreen({super.key});
+  final int? quotationId;
+  final Map<String, dynamic>? quotationData;
+
+  const CreateQuotationScreen({
+    super.key,
+    this.quotationId,
+    this.quotationData,
+  });
 
   @override
   State<CreateQuotationScreen> createState() => _CreateQuotationScreenState();
@@ -66,17 +75,141 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
 
   bool _isLoading = false;
 
+  bool get _isEditMode =>
+      widget.quotationId != null || widget.quotationData != null;
+
   @override
   void initState() {
     super.initState();
+    _loadInitialData();
     _loadBankAccounts();
     _loadNextQuotationNumber();
   }
 
+  Future<void> _loadInitialData() async {
+    if (widget.quotationId != null) {
+      // Fetch full quotation data from API using ID
+      final orgProvider =
+          Provider.of<OrganizationProvider>(context, listen: false);
+      if (orgProvider.selectedOrganization == null) return;
+
+      try {
+        final quotationService = QuotationService();
+        final quotation = await quotationService.getQuotation(
+          widget.quotationId!,
+          orgProvider.selectedOrganization!.id,
+        );
+
+        debugPrint('📦 Quotation loaded: ${quotation.quotationNumber}');
+        debugPrint('📦 Items count: ${quotation.items?.length ?? 0}');
+        if (quotation.items != null) {
+          for (var item in quotation.items!) {
+            debugPrint(
+                '  - Item: ${item.itemName}, Qty: ${item.quantity}, Price: ${item.pricePerUnit}');
+          }
+        }
+
+        setState(() {
+          _quotationNumberController.text = quotation.quotationNumber;
+          _quotationDate = quotation.quotationDate;
+          _validityDate = quotation.validityDate;
+          if (quotation.party != null) {
+            _selectedParty = PartyModel(
+              id: quotation.party!.id,
+              name: quotation.party!.name,
+              phone: quotation.party!.phone ?? '',
+              email: quotation.party!.email,
+              gstNo: '',
+              billingAddress: '',
+              shippingAddress: '',
+              partyType: 'customer',
+              isActive: true,
+              organizationId: quotation.organizationId,
+              createdAt: DateTime.now(),
+            );
+          }
+          // Load items
+          if (quotation.items != null && quotation.items!.isNotEmpty) {
+            _quotationItems = quotation.items!.map((apiItem) {
+              // Create a minimal ItemModel from API data
+              final itemModel = ItemModel(
+                id: apiItem.itemId,
+                organizationId: quotation.organizationId,
+                itemName: apiItem.itemName,
+                itemCode: apiItem.itemCode ?? '',
+                sellingPrice: apiItem.pricePerUnit,
+                sellingPriceWithTax: false,
+                purchasePrice: 0,
+                purchasePriceWithTax: false,
+                mrp: apiItem.mrp ?? 0,
+                stockQty: 0,
+                openingStock: 0,
+                unit: apiItem.unit,
+                lowStockAlert: 0,
+                enableLowStockWarning: false,
+                hsnCode: apiItem.hsnSac,
+                gstRate: apiItem.taxPercent,
+                isActive: true,
+                createdAt: DateTime.now(),
+              );
+
+              // Create QuotationItem with the ItemModel
+              return QuotationItem(
+                item: itemModel,
+                quantity: apiItem.quantity,
+                pricePerUnit: apiItem.pricePerUnit,
+                discountPercent: apiItem.discountPercent,
+                taxPercent: apiItem.taxPercent,
+              );
+            }).toList();
+            debugPrint(
+                '✅ Loaded ${_quotationItems.length} items into _quotationItems list');
+          }
+        });
+
+        // Debug after setState
+        debugPrint(
+            '🎯 After setState: _quotationItems has ${_quotationItems.length} items');
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error loading quotation: $e')),
+          );
+        }
+      }
+    } else if (widget.quotationData != null) {
+      // Fallback to basic data if only data map is provided
+      setState(() {
+        if (widget.quotationData!['quotation_number'] != null) {
+          _quotationNumberController.text =
+              widget.quotationData!['quotation_number'].toString();
+        }
+        if (widget.quotationData!['quotation_date'] != null) {
+          _quotationDate =
+              DateTime.parse(widget.quotationData!['quotation_date']);
+        }
+        if (widget.quotationData!['validity_date'] != null) {
+          _validityDate =
+              DateTime.parse(widget.quotationData!['validity_date']);
+        }
+      });
+    }
+  }
+
   Future<void> _loadNextQuotationNumber() async {
+    final orgProvider =
+        Provider.of<OrganizationProvider>(context, listen: false);
+
+    if (orgProvider.selectedOrganization == null) return;
+
+    // Don't load next number if in edit mode
+    if (_isEditMode) return;
+
     try {
       final quotationService = QuotationService();
-      final result = await quotationService.getNextQuotationNumber();
+      final result = await quotationService.getNextQuotationNumber(
+        orgProvider.selectedOrganization!.id,
+      );
       setState(() {
         _quotationNumberController.text = result['next_number'].toString();
       });
@@ -324,11 +457,11 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
       }
 
       final quotationData = {
-        'organization_id': orgProvider.selectedOrganization!.id,
         'party_id': _selectedParty!.id,
         'quotation_number': _quotationNumberController.text,
-        'quotation_date': _quotationDate.toIso8601String(),
-        'validity_date': _validityDate.toIso8601String(),
+        'quotation_date': _quotationDate.toIso8601String().split('T')[0],
+        'valid_for': int.tryParse(_validForController.text) ?? 30,
+        'validity_date': _validityDate.toIso8601String().split('T')[0],
         'subtotal': _subtotal,
         'discount_amount': _discountAmount,
         'tax_amount': _totalTax,
@@ -338,21 +471,24 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
         'items': _quotationItems.map((item) {
           return {
             'item_id': item.item.id,
+            'item_name': item.item.itemName,
+            'hsn_sac': item.item.hsnCode,
+            'item_code': item.item.itemCode,
+            'mrp': item.item.mrp,
+            'unit': item.item.unit,
             'quantity': item.quantity,
             'price_per_unit': item.pricePerUnit,
             'discount_percent': item.discountPercent,
             'tax_percent': item.taxPercent,
-            'subtotal': item.subtotal,
-            'discount_amount': item.discountAmount,
-            'taxable_amount': item.taxableAmount,
-            'tax_amount': item.taxAmount,
-            'line_total': item.lineTotal,
           };
         }).toList(),
       };
 
       final quotationService = QuotationService();
-      await quotationService.createQuotation(quotationData);
+      await quotationService.createQuotation(
+        orgProvider.selectedOrganization!.id,
+        quotationData,
+      );
 
       setState(() => _isLoading = false);
 
@@ -395,54 +531,14 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Create Quotation',
-          style: TextStyle(color: Colors.black),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.qr_code_scanner, color: Colors.black),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.settings_outlined, color: Colors.black),
-            onPressed: () {},
-          ),
-          TextButton(
-            onPressed:
-                _isLoading ? null : () => _saveQuotation(saveAndNew: true),
-            child: const Text('Save & New'),
-          ),
-          const SizedBox(width: 8),
-          ElevatedButton(
-            onPressed: _isLoading ? null : _saveQuotation,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryDark,
-              foregroundColor: Colors.white,
-            ),
-            child: _isLoading
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
-                : const Text('Save'),
-          ),
-          const SizedBox(width: 16),
-        ],
-      ),
+    debugPrint('🔄 Building UI with ${_quotationItems.length} items');
+    return DialogScaffold(
+      title: _isEditMode ? 'Edit Quotation' : 'Create Quotation',
+      onSave: _saveQuotation,
+      onSettings: () {
+        Navigator.pushNamed(context, '/settings');
+      },
+      isSaving: _isLoading,
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(24),

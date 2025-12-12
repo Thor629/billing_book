@@ -1,25 +1,25 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../core/constants/app_config.dart';
+import 'storage_service.dart';
 
 class ApiClient {
-  final _storage = const FlutterSecureStorage();
+  final StorageService _storage = StorageService();
   final http.Client _client = http.Client();
 
   // Get stored token
   Future<String?> getToken() async {
-    return await _storage.read(key: AppConfig.tokenKey);
+    return await _storage.read(AppConfig.tokenKey);
   }
 
   // Save token
   Future<void> saveToken(String token) async {
-    await _storage.write(key: AppConfig.tokenKey, value: token);
+    await _storage.write(AppConfig.tokenKey, token);
   }
 
   // Delete token
   Future<void> deleteToken() async {
-    await _storage.delete(key: AppConfig.tokenKey);
+    await _storage.delete(AppConfig.tokenKey);
   }
 
   // Get headers with authentication
@@ -90,9 +90,15 @@ class ApiClient {
     String endpoint,
     Map<String, dynamic> body, {
     bool includeAuth = true,
+    Map<String, String>? customHeaders,
   }) async {
     final url = Uri.parse('${AppConfig.apiBaseUrl}$endpoint');
     final headers = await _getHeaders(includeAuth: includeAuth);
+
+    // Add custom headers if provided
+    if (customHeaders != null) {
+      headers.addAll(customHeaders);
+    }
 
     try {
       final response = await _client

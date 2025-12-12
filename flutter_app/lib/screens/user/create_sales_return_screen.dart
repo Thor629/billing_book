@@ -9,9 +9,17 @@ import '../../models/item_model.dart';
 import '../../models/bank_account_model.dart';
 import '../../providers/organization_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../widgets/dialog_scaffold.dart';
 
 class CreateSalesReturnScreen extends StatefulWidget {
-  const CreateSalesReturnScreen({super.key});
+  final int? returnId;
+  final Map<String, dynamic>? returnData;
+
+  const CreateSalesReturnScreen({
+    super.key,
+    this.returnId,
+    this.returnData,
+  });
 
   @override
   State<CreateSalesReturnScreen> createState() =>
@@ -20,9 +28,6 @@ class CreateSalesReturnScreen extends StatefulWidget {
 
 class _CreateSalesReturnScreenState extends State<CreateSalesReturnScreen> {
   final SalesReturnService _returnService = SalesReturnService();
-  final PartyService _partyService = PartyService();
-  final ItemService _itemService = ItemService();
-  final BankAccountService _bankAccountService = BankAccountService();
 
   final TextEditingController _returnNumberController =
       TextEditingController(text: '10');
@@ -45,19 +50,27 @@ class _CreateSalesReturnScreenState extends State<CreateSalesReturnScreen> {
   List<BankAccount> _bankAccounts = [];
   int? _selectedBankAccountId;
 
+  double _discountAmount = 0.0;
+  double _additionalCharges = 0.0;
+
   double get _subtotal =>
-      _items.fold(0, (sum, item) => sum + (item.price * item.quantity));
-  double get _discount => 0;
-  double get _tax => _items.fold(0, (sum, item) => sum + item.taxAmount);
-  double get _totalAmount => _subtotal - _discount + _tax;
+      _items.fold(0.0, (sum, item) => sum + (item.price * item.quantity));
+  double get _discount => _discountAmount;
+  double get _tax => _items.fold(0.0, (sum, item) => sum + item.taxAmount);
+  double get _totalAmount =>
+      (_subtotal - _discount + _tax + _additionalCharges);
+
+  bool get _isEditMode => widget.returnId != null || widget.returnData != null;
 
   @override
   void initState() {
     super.initState();
     _loadInitialData();
+    _loadNextReturnNumber();
   }
 
   Future<void> _loadInitialData() async {
+    // Load parties, items, and bank accounts for selection dialogs
     final orgProvider =
         Provider.of<OrganizationProvider>(context, listen: false);
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
@@ -67,20 +80,31 @@ class _CreateSalesReturnScreenState extends State<CreateSalesReturnScreen> {
         final token = await authProvider.token;
         if (token == null) return;
 
-        final parties = await _partyService
-            .getParties(orgProvider.selectedOrganization!.id);
+        final partyService = PartyService();
+        final itemService = ItemService();
+        final bankAccountService = BankAccountService();
+
+        final parties =
+            await partyService.getParties(orgProvider.selectedOrganization!.id);
         final items =
-            await _itemService.getItems(orgProvider.selectedOrganization!.id);
-        final accounts = await _bankAccountService.getBankAccounts(
+            await itemService.getItems(orgProvider.selectedOrganization!.id);
+        final accounts = await bankAccountService.getBankAccounts(
           token,
           orgProvider.selectedOrganization!.id,
         );
+
+        debugPrint('📋 Loaded ${parties.length} parties');
+        debugPrint('📋 Loaded ${items.length} items');
+        debugPrint('📋 Loaded ${accounts.length} bank accounts');
 
         setState(() {
           _parties = parties;
           _availableItems = items;
           _bankAccounts = accounts;
         });
+
+        debugPrint(
+            '✅ Data set in state: parties=${_parties.length}, items=${_availableItems.length}');
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -89,57 +113,121 @@ class _CreateSalesReturnScreenState extends State<CreateSalesReturnScreen> {
         }
       }
     }
+
+    // Load existing return data if in edit mode
+    if (widget.returnId != null) {
+      // Fetch full return data from API using ID
+      try {
+        final result = await _returnService.getReturn(widget.returnId!);
+
+        debugPrint('📦 Return loaded: ${result.returnNumber}');
+        debugPrint('📦 Items count: ${result.items?.length ?? 0}');
+        if (result.items != null) {
+          for (var item in result.items!) {
+            debugPrint(
+                '  - Item: ${item.itemName ?? "Unknown"}, Qty: ${item.quantity}, Price: ${item.price}');
+          }
+        }
+
+        setState(() {
+          _returnNumberController.text = result.returnNumber;
+          _returnDate = result.returnDate;
+          _selectedPartyId = result.partyId;
+          _selectedPartyName = result.partyName;
+          _linkedInvoiceNumber = result.invoiceNumber;
+          // Normalize payment mode to match dropdown values
+          final mode = result.paymentMode ?? 'cash';
+          _paymentMode =
+              mode[0].toUpperCase() + mode.substring(1).toLowerCase();
+          _amountPaidController.text = result.amountPaid.toString();
+          _isFullyPaid = result.status == 'refunded';
+          // Load items
+          if (result.items != null && result.items!.isNotEmpty) {
+            _items = result.items!.map((item) {
+              return ReturnItem(
+                itemId: item.itemId,
+                itemName: item.itemName ?? 'Unknown Item',
+                hsnSac: item.hsnSac ?? '',
+                itemCode: item.itemCode ?? '',
+                quantity: item.quantity,
+                price: item.price,
+                discount: item.discount,
+                taxRate: item.taxRate,
+                taxAmount: item.taxAmount,
+              );
+            }).toList();
+          }
+        });
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error loading return: $e')),
+          );
+        }
+      }
+    } else if (widget.returnData != null) {
+      // Fallback to basic data
+      setState(() {
+        if (widget.returnData!['return_number'] != null) {
+          _returnNumberController.text =
+              widget.returnData!['return_number'].toString();
+        }
+        if (widget.returnData!['return_date'] != null) {
+          _returnDate = DateTime.parse(widget.returnData!['return_date']);
+        }
+        if (widget.returnData!['party_id'] != null) {
+          _selectedPartyId = widget.returnData!['party_id'];
+        }
+        if (widget.returnData!['party_name'] != null) {
+          _selectedPartyName = widget.returnData!['party_name'];
+        }
+        if (widget.returnData!['invoice_number'] != null) {
+          _linkedInvoiceNumber = widget.returnData!['invoice_number'];
+        }
+        if (widget.returnData!['payment_mode'] != null) {
+          // Normalize payment mode to match dropdown values
+          final mode = widget.returnData!['payment_mode'].toString();
+          _paymentMode =
+              mode[0].toUpperCase() + mode.substring(1).toLowerCase();
+        }
+        if (widget.returnData!['amount_paid'] != null) {
+          _amountPaidController.text =
+              widget.returnData!['amount_paid'].toString();
+        }
+      });
+    }
+  }
+
+  Future<void> _loadNextReturnNumber() async {
+    if (_isEditMode) return;
+    final orgProvider =
+        Provider.of<OrganizationProvider>(context, listen: false);
+
+    if (orgProvider.selectedOrganization == null) return;
+
+    try {
+      final nextNumberData = await _returnService.getNextReturnNumber(
+        orgProvider.selectedOrganization!.id,
+      );
+      setState(() {
+        _returnNumberController.text =
+            nextNumberData['next_number']?.toString() ?? '1';
+      });
+    } catch (e) {
+      // If error, keep default value
+      debugPrint('Error loading next return number: $e');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Create Sales Return',
-          style: TextStyle(color: Colors.black, fontSize: 18),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.qr_code_scanner, color: Colors.black),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.settings_outlined, color: Colors.black),
-            onPressed: () {},
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Save & New'),
-          ),
-          const SizedBox(width: 8),
-          ElevatedButton(
-            onPressed: _isSaving ? null : _saveReturn,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.purple[700],
-              foregroundColor: Colors.white,
-            ),
-            child: _isSaving
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
-                : const Text('Save'),
-          ),
-          const SizedBox(width: 16),
-        ],
-      ),
+    return DialogScaffold(
+      title: _isEditMode ? 'Edit Sales Return' : 'Create Sales Return',
+      onSave: _saveReturn,
+      onSettings: () {
+        Navigator.pushNamed(context, '/settings');
+      },
+      isSaving: _isSaving,
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -317,7 +405,7 @@ class _CreateSalesReturnScreenState extends State<CreateSalesReturnScreen> {
                                     MainAxisAlignment.spaceBetween,
                                 children: [
                                   TextButton.icon(
-                                    onPressed: () {},
+                                    onPressed: _showDiscountDialog,
                                     icon: const Icon(Icons.add, size: 16),
                                     label: const Text('Add Discount'),
                                   ),
@@ -329,11 +417,12 @@ class _CreateSalesReturnScreenState extends State<CreateSalesReturnScreen> {
                                     MainAxisAlignment.spaceBetween,
                                 children: [
                                   TextButton.icon(
-                                    onPressed: () {},
+                                    onPressed: _showAdditionalChargesDialog,
                                     icon: const Icon(Icons.add, size: 16),
                                     label: const Text('Add Additional Charges'),
                                   ),
-                                  const Text('₹ 0'),
+                                  Text(
+                                      '₹ ${_additionalCharges.toStringAsFixed(2)}'),
                                 ],
                               ),
                               const Divider(),
@@ -395,6 +484,7 @@ class _CreateSalesReturnScreenState extends State<CreateSalesReturnScreen> {
                                           _amountPaidController.text =
                                               _totalAmount.toStringAsFixed(2);
                                         }
+                                        // When unchecked, keep the current value
                                       });
                                     },
                                   ),
@@ -649,6 +739,8 @@ class _CreateSalesReturnScreenState extends State<CreateSalesReturnScreen> {
   }
 
   Future<void> _showPartySelectionDialog() async {
+    debugPrint(
+        '🔍 Opening party dialog. Parties available: ${_parties.length}');
     final selectedParty = await showDialog<PartyModel>(
       context: context,
       builder: (context) => Dialog(
@@ -827,7 +919,7 @@ class _CreateSalesReturnScreenState extends State<CreateSalesReturnScreen> {
         'tax': _tax,
         'total_amount': _totalAmount,
         'amount_paid': amountPaid,
-        'payment_mode': _paymentMode,
+        'payment_mode': _paymentMode.toLowerCase(),
         if (_selectedBankAccountId != null)
           'bank_account_id': _selectedBankAccountId,
         'status': status,
@@ -842,7 +934,10 @@ class _CreateSalesReturnScreenState extends State<CreateSalesReturnScreen> {
       if (mounted) {
         Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Sales return created successfully')),
+          const SnackBar(
+            content: Text('Sales return created successfully'),
+            backgroundColor: Colors.green,
+          ),
         );
       }
     } catch (e) {
@@ -856,6 +951,73 @@ class _CreateSalesReturnScreenState extends State<CreateSalesReturnScreen> {
         setState(() => _isSaving = false);
       }
     }
+  }
+
+  void _showDiscountDialog() {
+    final controller = TextEditingController(text: _discountAmount.toString());
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Discount'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'Discount Amount',
+            prefixText: '₹ ',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _discountAmount = double.tryParse(controller.text) ?? 0;
+              });
+              Navigator.pop(context);
+            },
+            child: const Text('Apply'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAdditionalChargesDialog() {
+    final controller =
+        TextEditingController(text: _additionalCharges.toString());
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Additional Charges'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'Additional Charges',
+            prefixText: '₹ ',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _additionalCharges = double.tryParse(controller.text) ?? 0;
+              });
+              Navigator.pop(context);
+            },
+            child: const Text('Apply'),
+          ),
+        ],
+      ),
+    );
   }
 
   String _getMonthName(int month) {

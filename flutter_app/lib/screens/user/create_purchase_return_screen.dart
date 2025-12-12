@@ -9,9 +9,17 @@ import '../../models/item_model.dart';
 import '../../models/bank_account_model.dart';
 import '../../providers/organization_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../widgets/dialog_scaffold.dart';
 
 class CreatePurchaseReturnScreen extends StatefulWidget {
-  const CreatePurchaseReturnScreen({super.key});
+  final int? returnId;
+  final Map<String, dynamic>? returnData;
+
+  const CreatePurchaseReturnScreen({
+    super.key,
+    this.returnId,
+    this.returnData,
+  });
 
   @override
   State<CreatePurchaseReturnScreen> createState() =>
@@ -47,11 +55,17 @@ class _CreatePurchaseReturnScreenState
   List<BankAccount> _bankAccounts = [];
   int? _selectedBankAccountId;
 
+  double _discountAmount = 0.0;
+  double _additionalCharges = 0.0;
+
   double get _subtotal =>
-      _items.fold(0, (sum, item) => sum + (item.price * item.quantity));
-  double get _discount => 0;
-  double get _tax => _items.fold(0, (sum, item) => sum + item.taxAmount);
-  double get _totalAmount => _subtotal - _discount + _tax;
+      _items.fold(0.0, (sum, item) => sum + (item.price * item.quantity));
+  double get _discount => _discountAmount;
+  double get _tax => _items.fold(0.0, (sum, item) => sum + item.taxAmount);
+  double get _totalAmount =>
+      (_subtotal - _discount + _tax + _additionalCharges);
+
+  bool get _isEditMode => widget.returnId != null || widget.returnData != null;
 
   @override
   void initState() {
@@ -60,6 +74,36 @@ class _CreatePurchaseReturnScreenState
   }
 
   Future<void> _loadInitialData() async {
+    // Load from widget data if in edit mode
+    if (widget.returnData != null) {
+      setState(() {
+        if (widget.returnData!['return_number'] != null) {
+          _returnNumberController.text =
+              widget.returnData!['return_number'].toString();
+        }
+        if (widget.returnData!['return_date'] != null) {
+          _returnDate = DateTime.parse(widget.returnData!['return_date']);
+        }
+        if (widget.returnData!['party_id'] != null) {
+          _selectedPartyId = widget.returnData!['party_id'];
+        }
+        if (widget.returnData!['party_name'] != null) {
+          _selectedPartyName = widget.returnData!['party_name'];
+        }
+        if (widget.returnData!['payment_mode'] != null) {
+          // Normalize payment mode to match dropdown values
+          final mode = widget.returnData!['payment_mode'].toString();
+          _paymentMode =
+              mode[0].toUpperCase() + mode.substring(1).toLowerCase();
+        }
+        if (widget.returnData!['amount_received'] != null) {
+          _amountReceivedController.text =
+              widget.returnData!['amount_received'].toString();
+        }
+      });
+    }
+
+    // Load supporting data
     final orgProvider =
         Provider.of<OrganizationProvider>(context, listen: false);
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
@@ -100,53 +144,13 @@ class _CreatePurchaseReturnScreenState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Create Purchase Return',
-          style: TextStyle(color: Colors.black, fontSize: 18),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.qr_code_scanner, color: Colors.black),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.settings_outlined, color: Colors.black),
-            onPressed: () {},
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Save & New'),
-          ),
-          const SizedBox(width: 8),
-          ElevatedButton(
-            onPressed: _isSaving ? null : _saveReturn,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.purple[700],
-              foregroundColor: Colors.white,
-            ),
-            child: _isSaving
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
-                : const Text('Save'),
-          ),
-          const SizedBox(width: 16),
-        ],
-      ),
+    return DialogScaffold(
+      title: _isEditMode ? 'Edit Purchase Return' : 'Create Purchase Return',
+      onSave: _saveReturn,
+      onSettings: () {
+        Navigator.pushNamed(context, '/settings');
+      },
+      isSaving: _isSaving,
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(24),

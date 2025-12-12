@@ -7,9 +7,17 @@ import '../../models/party_model.dart';
 import '../../models/bank_account_model.dart';
 import '../../providers/organization_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../widgets/dialog_scaffold.dart';
 
 class CreateDebitNoteScreen extends StatefulWidget {
-  const CreateDebitNoteScreen({super.key});
+  final int? debitNoteId;
+  final Map<String, dynamic>? debitNoteData;
+
+  const CreateDebitNoteScreen({
+    super.key,
+    this.debitNoteId,
+    this.debitNoteData,
+  });
 
   @override
   State<CreateDebitNoteScreen> createState() => _CreateDebitNoteScreenState();
@@ -51,6 +59,9 @@ class _CreateDebitNoteScreenState extends State<CreateDebitNoteScreen> {
 
   double get _totalAmount => _subtotal + _tax;
 
+  bool get _isEditMode =>
+      widget.debitNoteId != null || widget.debitNoteData != null;
+
   @override
   void initState() {
     super.initState();
@@ -58,6 +69,41 @@ class _CreateDebitNoteScreenState extends State<CreateDebitNoteScreen> {
   }
 
   Future<void> _loadInitialData() async {
+    // If in edit mode, fetch full debit note data from API
+    if (widget.debitNoteId != null) {
+      final orgProvider =
+          Provider.of<OrganizationProvider>(context, listen: false);
+      if (orgProvider.selectedOrganization != null) {
+        try {
+          final debitNote = await _debitNoteService.getDebitNote(
+            widget.debitNoteId!,
+            orgProvider.selectedOrganization!.id,
+          );
+
+          setState(() {
+            _debitNoteNumberController.text = debitNote.debitNoteNumber;
+            _debitNoteDate = debitNote.debitNoteDate;
+            _selectedPartyId = debitNote.partyId;
+            _selectedPartyName = debitNote.partyName;
+            // Normalize payment mode to match dropdown values
+            final mode = debitNote.paymentMode ?? 'cash';
+            _paymentMode =
+                mode[0].toUpperCase() + mode.substring(1).toLowerCase();
+            _amountPaidController.text = debitNote.amountPaid.toString();
+            _isFullyPaid = debitNote.status == 'issued';
+            // TODO: Load items - needs proper item class structure
+          });
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Error loading debit note: $e')),
+            );
+          }
+        }
+      }
+    }
+
+    // Load supporting data
     final orgProvider =
         Provider.of<OrganizationProvider>(context, listen: false);
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
@@ -74,15 +120,16 @@ class _CreateDebitNoteScreenState extends State<CreateDebitNoteScreen> {
           orgProvider.selectedOrganization!.id,
         );
 
-        // Get next debit note number
-        final nextNumberData = await _debitNoteService
-            .getNextDebitNoteNumber(orgProvider.selectedOrganization!.id);
+        // Get next debit note number only if not in edit mode
+        if (!_isEditMode) {
+          final nextNumberData = await _debitNoteService
+              .getNextDebitNoteNumber(orgProvider.selectedOrganization!.id);
+          _debitNoteNumberController.text = nextNumberData['next_number'];
+        }
 
         setState(() {
           _parties = parties;
           _bankAccounts = accounts;
-          _debitNoteNumberController.text =
-              nextNumberData['next_number'] ?? 'DN-000001';
         });
       } catch (e) {
         if (mounted) {
@@ -96,40 +143,10 @@ class _CreateDebitNoteScreenState extends State<CreateDebitNoteScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Create Debit Note',
-          style: TextStyle(color: Colors.black, fontSize: 18),
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: _isSaving ? null : _saveDebitNote,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.purple[700],
-              foregroundColor: Colors.white,
-            ),
-            child: _isSaving
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
-                : const Text('Save'),
-          ),
-          const SizedBox(width: 16),
-        ],
-      ),
+    return DialogScaffold(   
+      title: _isEditMode ? 'Edit Debit Note' : 'Create Debit Note',
+      onSave: _saveDebitNote,
+      isSaving: _isSaving,
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -440,6 +457,7 @@ class _CreateDebitNoteScreenState extends State<CreateDebitNoteScreen> {
                                       _amountPaidController.text =
                                           _totalAmount.toStringAsFixed(2);
                                     }
+                                    // When unchecked, keep the current value
                                   });
                                 },
                               ),

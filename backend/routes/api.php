@@ -132,6 +132,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/', [App\Http\Controllers\PaymentOutController::class, 'store']);
         Route::get('/next-number', [App\Http\Controllers\PaymentOutController::class, 'getNextPaymentNumber']);
         Route::get('/{id}', [App\Http\Controllers\PaymentOutController::class, 'show']);
+        Route::put('/{id}', [App\Http\Controllers\PaymentOutController::class, 'update']);
         Route::delete('/{id}', [App\Http\Controllers\PaymentOutController::class, 'destroy']);
     });
     
@@ -186,6 +187,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/next-number', [App\Http\Controllers\ExpenseController::class, 'getNextExpenseNumber']);
         Route::get('/categories', [App\Http\Controllers\ExpenseController::class, 'getCategories']);
         Route::get('/{id}', [App\Http\Controllers\ExpenseController::class, 'show']);
+        Route::put('/{id}', [App\Http\Controllers\ExpenseController::class, 'update']);
         Route::delete('/{id}', [App\Http\Controllers\ExpenseController::class, 'destroy']);
     });
     

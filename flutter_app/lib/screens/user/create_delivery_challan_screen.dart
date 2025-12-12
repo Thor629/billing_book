@@ -8,9 +8,17 @@ import '../../models/party_model.dart';
 import '../../models/item_model.dart';
 import '../../providers/organization_provider.dart';
 import '../../core/constants/app_colors.dart';
+import '../../widgets/dialog_scaffold.dart';
 
 class CreateDeliveryChallanScreen extends StatefulWidget {
-  const CreateDeliveryChallanScreen({super.key});
+  final int? challanId;
+  final Map<String, dynamic>? challanData;
+
+  const CreateDeliveryChallanScreen({
+    super.key,
+    this.challanId,
+    this.challanData,
+  });
 
   @override
   State<CreateDeliveryChallanScreen> createState() =>
@@ -58,6 +66,9 @@ class _CreateDeliveryChallanScreenState
 
   double get _totalAmount => _subtotal + _taxAmount;
 
+  bool get _isEditMode =>
+      widget.challanId != null || widget.challanData != null;
+
   @override
   void initState() {
     super.initState();
@@ -65,15 +76,42 @@ class _CreateDeliveryChallanScreenState
   }
 
   Future<void> _loadInitialData() async {
+    // If in edit mode, fetch full challan data from API
+    if (widget.challanId != null) {
+      try {
+        final challan =
+            await _challanService.getDeliveryChallan(widget.challanId!);
+
+        setState(() {
+          _challanNumberController.text = challan.challanNumber;
+          _challanDate = challan.challanDate;
+          _selectedPartyId = challan.party?.id;
+          _selectedPartyName = challan.party?.name;
+          _notesController.text = challan.notes ?? '';
+          // TODO: Load items - needs proper item class structure
+        });
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error loading challan: $e')),
+          );
+        }
+      }
+    }
+
+    // Load supporting data
     final orgProvider =
         Provider.of<OrganizationProvider>(context, listen: false);
 
     if (orgProvider.selectedOrganization == null) return;
 
     try {
-      final nextNumber = await _challanService
-          .getNextChallanNumber(orgProvider.selectedOrganization!.id);
-      _challanNumberController.text = nextNumber.toString();
+      // Get next challan number only if not in edit mode
+      if (!_isEditMode) {
+        final nextNumber = await _challanService
+            .getNextChallanNumber(orgProvider.selectedOrganization!.id);
+        _challanNumberController.text = nextNumber.toString();
+      }
 
       final items =
           await _itemService.getItems(orgProvider.selectedOrganization!.id);
@@ -205,48 +243,13 @@ class _CreateDeliveryChallanScreenState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Create Delivery Challan',
-          style: TextStyle(color: Colors.black),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_outlined, color: Colors.black),
-            onPressed: () {},
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: _isSaving ? null : _save,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryDark,
-              foregroundColor: Colors.white,
-            ),
-            child: _isSaving
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Text('Save Delivery Challan'),
-          ),
-          const SizedBox(width: 16),
-        ],
-      ),
+    return DialogScaffold(
+      title: _isEditMode ? 'Edit Delivery Challan' : 'Create Delivery Challan',
+      onSave: _save,
+      onSettings: () {
+        Navigator.pushNamed(context, '/settings');
+      },
+      isSaving: _isSaving,
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(24),

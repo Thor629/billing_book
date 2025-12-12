@@ -72,9 +72,23 @@ class SalesReturnService {
         return SalesReturn.fromJson(data['return']);
       } else {
         final error = json.decode(response.body);
-        throw Exception(error['message'] ?? 'Failed to create sales return');
+
+        // Handle validation errors
+        if (error['errors'] != null) {
+          final errors = error['errors'] as Map<String, dynamic>;
+          final firstError = errors.values.first;
+          if (firstError is List && firstError.isNotEmpty) {
+            throw Exception(firstError[0]);
+          }
+        }
+
+        final errorMessage = error['error'] ??
+            error['message'] ??
+            'Failed to create sales return';
+        throw Exception(errorMessage);
       }
     } catch (e) {
+      if (e is Exception) rethrow;
       throw Exception('Error creating sales return: $e');
     }
   }

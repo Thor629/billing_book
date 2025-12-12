@@ -1,12 +1,12 @@
 import 'dart:convert';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../core/constants/app_config.dart';
 import '../models/user_model.dart';
 import 'api_client.dart';
+import 'storage_service.dart';
 
 class AuthService {
   final ApiClient _apiClient = ApiClient();
-  final _storage = const FlutterSecureStorage();
+  final StorageService _storage = StorageService();
 
   // Login
   Future<Map<String, dynamic>> login(String email, String password) async {
@@ -22,10 +22,7 @@ class AuthService {
     await _apiClient.saveToken(data['token']);
 
     // Save user data
-    await _storage.write(
-      key: AppConfig.userKey,
-      value: jsonEncode(data['user']),
-    );
+    await _storage.write(AppConfig.userKey, jsonEncode(data['user']));
 
     return data;
   }
@@ -40,7 +37,7 @@ class AuthService {
 
     // Clear local storage
     await _apiClient.deleteToken();
-    await _storage.delete(key: AppConfig.userKey);
+    await _storage.delete(AppConfig.userKey);
   }
 
   // Refresh token
@@ -56,7 +53,7 @@ class AuthService {
 
   // Get stored user
   Future<UserModel?> getStoredUser() async {
-    final userJson = await _storage.read(key: AppConfig.userKey);
+    final userJson = await _storage.read(AppConfig.userKey);
     if (userJson != null) {
       return UserModel.fromJson(jsonDecode(userJson));
     }
@@ -100,10 +97,7 @@ class AuthService {
     await _apiClient.saveToken(data['token']);
 
     // Save user data
-    await _storage.write(
-      key: AppConfig.userKey,
-      value: jsonEncode(data['user']),
-    );
+    await _storage.write(AppConfig.userKey, jsonEncode(data['user']));
 
     return data;
   }

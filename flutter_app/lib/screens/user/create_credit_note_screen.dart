@@ -9,9 +9,17 @@ import '../../models/item_model.dart';
 import '../../models/bank_account_model.dart';
 import '../../providers/organization_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../widgets/dialog_scaffold.dart';
 
 class CreateCreditNoteScreen extends StatefulWidget {
-  const CreateCreditNoteScreen({super.key});
+  final int? creditNoteId;
+  final Map<String, dynamic>? creditNoteData;
+
+  const CreateCreditNoteScreen({
+    super.key,
+    this.creditNoteId,
+    this.creditNoteData,
+  });
 
   @override
   State<CreateCreditNoteScreen> createState() => _CreateCreditNoteScreenState();
@@ -45,11 +53,18 @@ class _CreateCreditNoteScreenState extends State<CreateCreditNoteScreen> {
   List<BankAccount> _bankAccounts = [];
   int? _selectedBankAccountId;
 
+  double _discountAmount = 0.0;
+  double _additionalCharges = 0.0;
+
   double get _subtotal =>
-      _items.fold(0, (sum, item) => sum + (item.price * item.quantity));
-  double get _discount => 0;
-  double get _tax => _items.fold(0, (sum, item) => sum + item.taxAmount);
-  double get _totalAmount => _subtotal - _discount + _tax;
+      _items.fold(0.0, (sum, item) => sum + (item.price * item.quantity));
+  double get _discount => _discountAmount;
+  double get _tax => _items.fold(0.0, (sum, item) => sum + item.taxAmount);
+  double get _totalAmount =>
+      (_subtotal - _discount + _tax + _additionalCharges);
+
+  bool get _isEditMode =>
+      widget.creditNoteId != null || widget.creditNoteData != null;
 
   @override
   void initState() {
@@ -58,6 +73,58 @@ class _CreateCreditNoteScreenState extends State<CreateCreditNoteScreen> {
   }
 
   Future<void> _loadInitialData() async {
+    // If in edit mode, fetch full credit note data from API
+    if (widget.creditNoteId != null) {
+      try {
+        final creditNote =
+            await _creditNoteService.getCreditNote(widget.creditNoteId!);
+
+        setState(() {
+          _creditNoteNumberController.text =
+              creditNote.creditNoteNumber.toString();
+          _creditNoteDate = creditNote.creditNoteDate;
+          _selectedPartyId = creditNote.partyId;
+          _selectedPartyName = creditNote.partyName;
+          _invoiceSearchController.text =
+              creditNote.invoiceNumber?.toString() ?? '';
+          _linkedInvoiceNumber = creditNote.invoiceNumber;
+          _notesController.text = creditNote.notes ?? '';
+          _selectedBankAccountId = creditNote.bankAccountId;
+
+          // Normalize payment mode to match dropdown values
+          final mode = creditNote.paymentMode ?? 'cash';
+          _paymentMode =
+              mode[0].toUpperCase() + mode.substring(1).toLowerCase();
+          _amountReceivedController.text = creditNote.amountReceived.toString();
+          _isFullyPaid = creditNote.status == 'applied';
+
+          // Load items from credit note
+          if (creditNote.items != null && creditNote.items!.isNotEmpty) {
+            _items = creditNote.items!.map((item) {
+              return CreditNoteItemRow(
+                itemId: item.itemId,
+                itemName: item.itemName ?? 'Unknown Item',
+                hsnSac: item.hsnSac,
+                itemCode: item.itemCode,
+                quantity: item.quantity,
+                price: item.price,
+                discount: item.discount,
+                taxRate: item.taxRate,
+                taxAmount: item.taxAmount,
+              );
+            }).toList();
+          }
+        });
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error loading credit note: $e')),
+          );
+        }
+      }
+    }
+
+    // Load supporting data (parties, items, accounts)
     final orgProvider =
         Provider.of<OrganizationProvider>(context, listen: false);
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
@@ -66,6 +133,14 @@ class _CreateCreditNoteScreenState extends State<CreateCreditNoteScreen> {
       try {
         final token = await authProvider.token;
         if (token == null) return;
+
+        // Get next credit note number only if not in edit mode
+        if (!_isEditMode) {
+          final nextNumberData = await _creditNoteService
+              .getNextCreditNoteNumber(orgProvider.selectedOrganization!.id);
+          _creditNoteNumberController.text =
+              nextNumberData['next_number'].toString();
+        }
 
         final parties = await _partyService
             .getParties(orgProvider.selectedOrganization!.id);
@@ -93,44 +168,14 @@ class _CreateCreditNoteScreenState extends State<CreateCreditNoteScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Create Credit Note',
-          style: TextStyle(color: Colors.black, fontSize: 18),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_outlined, color: Colors.black),
-            onPressed: () {},
-          ),
-          ElevatedButton(
-            onPressed: _isSaving ? null : _saveCreditNote,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.purple[700],
-              foregroundColor: Colors.white,
-            ),
-            child: _isSaving
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
-                : const Text('Save'),
-          ),
-          const SizedBox(width: 16),
-        ],
-      ),
+    return DialogScaffold(
+      title: _isEditMode ? 'Edit Credit Note' : 'Create Credit Note',
+      onSave: _saveCreditNote,
+      onSettings: () {
+        Navigator.pushNamed(context, '/settings');
+      },
+      isSaving: _isSaving,
+      saveButtonText: 'Save',
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -306,11 +351,12 @@ class _CreateCreditNoteScreenState extends State<CreateCreditNoteScreen> {
                                     MainAxisAlignment.spaceBetween,
                                 children: [
                                   TextButton.icon(
-                                    onPressed: () {},
+                                    onPressed: _showAdditionalChargesDialog,
                                     icon: const Icon(Icons.add, size: 16),
                                     label: const Text('Add Additional Charges'),
                                   ),
-                                  const Text('₹ 0'),
+                                  Text(
+                                      '₹ ${_additionalCharges.toStringAsFixed(2)}'),
                                 ],
                               ),
                               Row(
@@ -318,7 +364,7 @@ class _CreateCreditNoteScreenState extends State<CreateCreditNoteScreen> {
                                     MainAxisAlignment.spaceBetween,
                                 children: [
                                   TextButton.icon(
-                                    onPressed: () {},
+                                    onPressed: _showDiscountDialog,
                                     icon: const Icon(Icons.add, size: 16),
                                     label: const Text('Add Discount'),
                                   ),
@@ -384,6 +430,7 @@ class _CreateCreditNoteScreenState extends State<CreateCreditNoteScreen> {
                                           _amountReceivedController.text =
                                               _totalAmount.toStringAsFixed(2);
                                         }
+                                        // When unchecked, keep the current value
                                       });
                                     },
                                   ),
@@ -491,21 +538,14 @@ class _CreateCreditNoteScreenState extends State<CreateCreditNoteScreen> {
                     // Credit Note No
                     const Text(
                       'Credit Note No.',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.grey,
-                      ),
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 4),
                     TextField(
                       controller: _creditNoteNumberController,
-                      decoration: InputDecoration(
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 12),
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        border: OutlineInputBorder(),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -513,13 +553,9 @@ class _CreateCreditNoteScreenState extends State<CreateCreditNoteScreen> {
                     // Credit Note Date
                     const Text(
                       'Credit Note Date',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.grey,
-                      ),
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 4),
                     InkWell(
                       onTap: () async {
                         final date = await showDatePicker(
@@ -536,7 +572,7 @@ class _CreateCreditNoteScreenState extends State<CreateCreditNoteScreen> {
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           border: Border.all(color: Colors.grey[300]!),
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(4),
                         ),
                         child: Row(
                           children: [
@@ -545,8 +581,6 @@ class _CreateCreditNoteScreenState extends State<CreateCreditNoteScreen> {
                             Text(
                               '${_creditNoteDate.day} ${_getMonthName(_creditNoteDate.month)} ${_creditNoteDate.year}',
                             ),
-                            const Spacer(),
-                            const Icon(Icons.arrow_drop_down),
                           ],
                         ),
                       ),
@@ -558,11 +592,7 @@ class _CreateCreditNoteScreenState extends State<CreateCreditNoteScreen> {
                       children: [
                         const Text(
                           'Link to Invoice',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.grey,
-                          ),
+                          style: TextStyle(fontSize: 12, color: Colors.grey),
                         ),
                         const SizedBox(width: 8),
                         Container(
@@ -579,7 +609,7 @@ class _CreateCreditNoteScreenState extends State<CreateCreditNoteScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 4),
                     TextField(
                       controller: _invoiceSearchController,
                       decoration: InputDecoration(
@@ -784,6 +814,73 @@ class _CreateCreditNoteScreenState extends State<CreateCreditNoteScreen> {
     }
   }
 
+  void _showDiscountDialog() {
+    final controller = TextEditingController(text: _discountAmount.toString());
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Discount'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'Discount Amount',
+            prefixText: '₹ ',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _discountAmount = double.tryParse(controller.text) ?? 0.0;
+              });
+              Navigator.pop(context);
+            },
+            child: const Text('Apply'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAdditionalChargesDialog() {
+    final controller =
+        TextEditingController(text: _additionalCharges.toString());
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Additional Charges'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'Additional Charges',
+            prefixText: '₹ ',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _additionalCharges = double.tryParse(controller.text) ?? 0.0;
+              });
+              Navigator.pop(context);
+            },
+            child: const Text('Apply'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _saveCreditNote() async {
     final orgProvider =
         Provider.of<OrganizationProvider>(context, listen: false);
@@ -833,7 +930,9 @@ class _CreateCreditNoteScreenState extends State<CreateCreditNoteScreen> {
       final creditNoteData = {
         'organization_id': orgProvider.selectedOrganization!.id,
         'party_id': _selectedPartyId,
-        'credit_note_number': _creditNoteNumberController.text,
+        // Only send credit_note_number when creating, not updating
+        if (!_isEditMode)
+          'credit_note_number': _creditNoteNumberController.text,
         'credit_note_date': _creditNoteDate.toIso8601String().split('T')[0],
         'invoice_number': _linkedInvoiceNumber,
         'subtotal': _subtotal,
@@ -851,12 +950,29 @@ class _CreateCreditNoteScreenState extends State<CreateCreditNoteScreen> {
         'items': _items.map((item) => item.toJson()).toList(),
       };
 
-      await _creditNoteService.createCreditNote(creditNoteData);
+      // Debug logging
+      print('=== CREDIT NOTE SAVE DEBUG ===');
+      print('Is Edit Mode: $_isEditMode');
+      print('Credit Note ID: ${widget.creditNoteId}');
+      print('Credit Note Number: ${_creditNoteNumberController.text}');
+
+      // Call update or create based on edit mode
+      if (_isEditMode && widget.creditNoteId != null) {
+        print('Calling UPDATE endpoint with ID: ${widget.creditNoteId}');
+        await _creditNoteService.updateCreditNote(
+            widget.creditNoteId!, creditNoteData);
+      } else {
+        print('Calling CREATE endpoint');
+        await _creditNoteService.createCreditNote(creditNoteData);
+      }
 
       if (mounted) {
         Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Credit note created successfully')),
+          SnackBar(
+              content: Text(_isEditMode
+                  ? 'Credit note updated successfully'
+                  : 'Credit note created successfully')),
         );
       }
     } catch (e) {

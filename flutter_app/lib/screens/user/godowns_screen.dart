@@ -495,62 +495,69 @@ class _GodownsScreenState extends State<GodownsScreen> {
                 }
 
                 return Card(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: DataTable(
-                      columns: const [
-                        DataColumn(label: Text('Name')),
-                        DataColumn(label: Text('Code')),
-                        DataColumn(label: Text('Address')),
-                        DataColumn(label: Text('Contact Person')),
-                        DataColumn(label: Text('Phone')),
-                        DataColumn(label: Text('Status')),
-                        DataColumn(label: Text('Actions')),
-                      ],
-                      rows: godownProvider.godowns.map((godown) {
-                        return DataRow(
-                          cells: [
-                            DataCell(Text(godown.name,
-                                style: AppTextStyles.bodyMedium)),
-                            DataCell(Text(godown.code)),
-                            DataCell(Text(godown.address ?? '-')),
-                            DataCell(Text(godown.contactPerson ?? '-')),
-                            DataCell(Text(godown.phone ?? '-')),
-                            DataCell(
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: godown.isActive
-                                      ? AppColors.success.withValues(alpha: 0.1)
-                                      : AppColors.warning
-                                          .withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  godown.isActive ? 'Active' : 'Inactive',
-                                  style: TextStyle(
-                                    color: godown.isActive
-                                        ? AppColors.success
-                                        : AppColors.warning,
-                                    fontWeight: FontWeight.bold,
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.vertical,
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: DataTable(
+                          columns: const [
+                            DataColumn(label: Text('Name')),
+                            DataColumn(label: Text('Code')),
+                            DataColumn(label: Text('Address')),
+                            DataColumn(label: Text('Contact Person')),
+                            DataColumn(label: Text('Phone')),
+                            DataColumn(label: Text('Status')),
+                            DataColumn(label: Text('Actions')),
+                          ],
+                          rows: godownProvider.godowns.map((godown) {
+                            return DataRow(
+                              cells: [
+                                DataCell(Text(godown.name,
+                                    style: AppTextStyles.bodyMedium)),
+                                DataCell(Text(godown.code)),
+                                DataCell(Text(godown.address ?? '-')),
+                                DataCell(Text(godown.contactPerson ?? '-')),
+                                DataCell(Text(godown.phone ?? '-')),
+                                DataCell(
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: godown.isActive
+                                          ? AppColors.success
+                                              .withValues(alpha: 0.1)
+                                          : AppColors.warning
+                                              .withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      godown.isActive ? 'Active' : 'Inactive',
+                                      style: TextStyle(
+                                        color: godown.isActive
+                                            ? AppColors.success
+                                            : AppColors.warning,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ),
-                            DataCell(
-                              IconButton(
-                                icon: const Icon(Icons.more_vert),
-                                onPressed: () =>
-                                    _showActionsMenu(context, godown),
-                                tooltip: 'Actions',
-                              ),
-                            ),
-                          ],
-                        );
-                      }).toList(),
+                                DataCell(
+                                  IconButton(
+                                    icon: const Icon(Icons.more_vert),
+                                    onPressed: () =>
+                                        _showActionsMenu(context, godown),
+                                    tooltip: 'Actions',
+                                  ),
+                                ),
+                              ],
+                            );
+                          }).toList(),
+                        ),
+                      ),
                     ),
                   ),
                 );

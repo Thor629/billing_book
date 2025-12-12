@@ -97,6 +97,12 @@ class PaymentInService {
     }
   }
 
+  // Alias for consistency
+  Future<PaymentIn> updatePaymentIn(
+      int id, Map<String, dynamic> paymentData) async {
+    return updatePayment(id, paymentData);
+  }
+
   Future<void> deletePayment(int id) async {
     try {
       final response = await _apiClient.delete('/payment-ins/$id');

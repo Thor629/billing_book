@@ -240,14 +240,90 @@ class PurchaseInvoiceController extends Controller
             'party_id' => 'sometimes|exists:parties,id',
             'invoice_date' => 'sometimes|date',
             'due_date' => 'nullable|date',
+            'paid_amount' => 'sometimes|numeric|min:0',
+            'bank_account_id' => 'nullable|exists:bank_accounts,id',
             'status' => 'sometimes|in:draft,pending,paid,partial,overdue,cancelled',
             'notes' => 'nullable|string',
             'terms' => 'nullable|string',
         ]);
 
-        $invoice->update($validated);
+        try {
+            DB::beginTransaction();
 
-        return response()->json($invoice->load(['party', 'items.item']));
+            $oldPaidAmount = $invoice->paid_amount;
+            $organizationId = $invoice->organization_id;
+
+            // If paid amount is being updated
+            if ($request->has('paid_amount')) {
+                $newPaidAmount = $request->paid_amount;
+
+                // Find and reverse old bank transaction
+                $oldTransaction = \App\Models\BankTransaction::where('description', 'like', '%' . $invoice->invoice_number . '%')
+                    ->where('organization_id', $organizationId)
+                    ->where('transaction_type', 'reduce')
+                    ->first();
+
+                if ($oldTransaction) {
+                    $oldAccount = \App\Models\BankAccount::find($oldTransaction->account_id);
+                    if ($oldAccount) {
+                        // Reverse old transaction (add back the old amount since it was deducted)
+                        $oldAccount->increment('current_balance', $oldPaidAmount);
+                    }
+                    $oldTransaction->delete();
+                }
+
+                // Create new bank transaction if payment is made
+                if ($newPaidAmount > 0) {
+                    $accountId = $request->bank_account_id ?? $invoice->bank_account_id;
+                    
+                    if ($accountId) {
+                        \App\Models\BankTransaction::create([
+                            'account_id' => $accountId,
+                            'organization_id' => $organizationId,
+                            'user_id' => $request->user()->id,
+                            'transaction_type' => 'reduce',
+                            'amount' => $newPaidAmount,
+                            'transaction_date' => $invoice->invoice_date,
+                            'description' => 'Payment for Purchase Invoice ' . $invoice->invoice_number,
+                        ]);
+
+                        $bankAccount = \App\Models\BankAccount::find($accountId);
+                        if ($bankAccount) {
+                            $bankAccount->decrement('current_balance', $newPaidAmount);
+                        }
+                    }
+                }
+
+                // Update payment status
+                $balanceAmount = $invoice->total_amount - $newPaidAmount;
+                $paymentStatus = 'unpaid';
+                if ($newPaidAmount >= $invoice->total_amount) {
+                    $paymentStatus = 'paid';
+                    $balanceAmount = 0;
+                } elseif ($newPaidAmount > 0) {
+                    $paymentStatus = 'partial';
+                }
+
+                $validated['paid_amount'] = $newPaidAmount;
+                $validated['balance_amount'] = $balanceAmount;
+                $validated['payment_status'] = $paymentStatus;
+            }
+
+            $invoice->update($validated);
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Purchase invoice updated successfully with bank balance adjustment',
+                'invoice' => $invoice->load(['party', 'items.item'])
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'message' => 'Failed to update purchase invoice',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     public function destroy($id, Request $request)

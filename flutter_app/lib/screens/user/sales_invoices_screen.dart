@@ -5,6 +5,7 @@ import '../../core/constants/app_text_styles.dart';
 import '../../models/sales_invoice_model.dart';
 import '../../services/sales_invoice_service.dart';
 import '../../providers/organization_provider.dart';
+import '../../widgets/unified_data_table.dart';
 import 'create_sales_invoice_screen.dart';
 
 class SalesInvoicesScreen extends StatefulWidget {
@@ -91,7 +92,9 @@ class _SalesInvoicesScreenState extends State<SalesInvoicesScreen> {
                     const SizedBox(width: 8),
                     IconButton(
                       icon: const Icon(Icons.settings_outlined),
-                      onPressed: () {},
+                      onPressed: () {
+                        Navigator.pushNamed(context, '/settings');
+                      },
                       tooltip: 'Settings',
                     ),
                     IconButton(
@@ -111,8 +114,7 @@ class _SalesInvoicesScreenState extends State<SalesInvoicesScreen> {
                 Expanded(
                   child: _buildMetricCard(
                     title: 'Total Sales',
-                    value:
-                        '₹${_summary['total_sales']?.toStringAsFixed(2) ?? '0.00'}',
+                    value: '₹${_formatAmount(_summary['total_sales'])}',
                     icon: Icons.currency_rupee,
                     color: Colors.purple,
                   ),
@@ -121,7 +123,7 @@ class _SalesInvoicesScreenState extends State<SalesInvoicesScreen> {
                 Expanded(
                   child: _buildMetricCard(
                     title: 'Paid',
-                    value: '₹${_summary['paid']?.toStringAsFixed(2) ?? '0.00'}',
+                    value: '₹${_formatAmount(_summary['paid'])}',
                     icon: Icons.check_circle_outline,
                     color: Colors.green,
                   ),
@@ -130,8 +132,7 @@ class _SalesInvoicesScreenState extends State<SalesInvoicesScreen> {
                 Expanded(
                   child: _buildMetricCard(
                     title: 'Unpaid',
-                    value:
-                        '₹${_summary['unpaid']?.toStringAsFixed(2) ?? '0.00'}',
+                    value: '₹${_formatAmount(_summary['unpaid'])}',
                     icon: Icons.warning_amber_outlined,
                     color: Colors.red,
                   ),
@@ -255,35 +256,16 @@ class _SalesInvoicesScreenState extends State<SalesInvoicesScreen> {
                             ],
                           ),
                         )
-                      : Card(
-                          child: SizedBox(
-                            width: double.infinity,
-                            child: SingleChildScrollView(
-                              child: SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                child: ConstrainedBox(
-                                  constraints: BoxConstraints(
-                                    minWidth:
-                                        MediaQuery.of(context).size.width - 300,
-                                  ),
-                                  child: DataTable(
-                                    showCheckboxColumn: true,
-                                    columnSpacing: 40,
-                                    columns: const [
-                                      DataColumn(label: Text('Date')),
-                                      DataColumn(label: Text('Invoice Number')),
-                                      DataColumn(label: Text('Party Name')),
-                                      DataColumn(label: Text('Due In')),
-                                      DataColumn(label: Text('Amount')),
-                                      DataColumn(label: Text('Status')),
-                                      DataColumn(label: Text('Actions')),
-                                    ],
-                                    rows: _buildInvoiceRows(),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
+                      : UnifiedDataTable(
+                          columns: const [
+                            DataColumn(label: TableHeader('Invoice #')),
+                            DataColumn(label: TableHeader('Vendor')),
+                            DataColumn(label: TableHeader('Date')),
+                            DataColumn(label: TableHeader('Amount')),
+                            DataColumn(label: TableHeader('Status')),
+                            DataColumn(label: TableHeader('Actions')),
+                          ],
+                          rows: _buildInvoiceRows(),
                         ),
             ),
           ],
@@ -293,6 +275,32 @@ class _SalesInvoicesScreenState extends State<SalesInvoicesScreen> {
   }
 
   List<DataRow> _buildInvoiceRows() {
+    return _invoices.map((invoice) {
+      final isPaid = invoice.paymentStatus == 'paid';
+
+      return DataRow(
+        cells: [
+          DataCell(TableCellText(invoice.fullInvoiceNumber)),
+          DataCell(TableCellText(invoice.party?.name ?? 'N/A')),
+          DataCell(TableCellText(_formatDate(invoice.invoiceDate))),
+          DataCell(TableCellText(
+            '₹${_formatAmount(invoice.totalAmount)}',
+            style: AppTextStyles.currency,
+          )),
+          DataCell(TableStatusBadge(isPaid ? 'Paid' : 'Unpaid')),
+          DataCell(
+            TableActionButtons(
+              onView: () => _viewInvoice(invoice),
+              onEdit: () => _editInvoice(invoice),
+              onDelete: () => _deleteInvoice(invoice),
+            ),
+          ),
+        ],
+      );
+    }).toList();
+  }
+
+  List<DataRow> _buildInvoiceRowsOld() {
     return _invoices.map((invoice) {
       final isPaid = invoice.paymentStatus == 'paid';
       final isOverdue = invoice.isOverdue;
@@ -315,10 +323,10 @@ class _SalesInvoicesScreenState extends State<SalesInvoicesScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('₹${invoice.totalAmount.toStringAsFixed(2)}'),
+                Text('₹${_formatAmount(invoice.totalAmount)}'),
                 if (invoice.balanceAmount > 0)
                   Text(
-                    '(₹${invoice.balanceAmount.toStringAsFixed(2)} unpaid)',
+                    '(₹${_formatAmount(invoice.balanceAmount)} unpaid)',
                     style: const TextStyle(
                       fontSize: 11,
                       color: Colors.grey,
@@ -347,9 +355,46 @@ class _SalesInvoicesScreenState extends State<SalesInvoicesScreen> {
             PopupMenuButton<String>(
               icon: const Icon(Icons.more_vert, size: 18),
               itemBuilder: (context) => [
-                const PopupMenuItem(value: 'view', child: Text('View')),
-                const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                const PopupMenuItem(value: 'delete', child: Text('Delete')),
+                const PopupMenuItem(
+                  value: 'view',
+                  child: Row(
+                    children: [
+                      Icon(Icons.visibility, size: 18),
+                      SizedBox(width: 8),
+                      Text('View'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'edit',
+                  child: Row(
+                    children: [
+                      Icon(Icons.edit, size: 18),
+                      SizedBox(width: 8),
+                      Text('Edit'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'duplicate',
+                  child: Row(
+                    children: [
+                      Icon(Icons.content_copy, size: 18),
+                      SizedBox(width: 8),
+                      Text('Duplicate'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'delete',
+                  child: Row(
+                    children: [
+                      Icon(Icons.delete, size: 18, color: Colors.red),
+                      SizedBox(width: 8),
+                      Text('Delete', style: TextStyle(color: Colors.red)),
+                    ],
+                  ),
+                ),
               ],
               onSelected: (value) => _handleInvoiceAction(value, invoice),
             ),
@@ -357,6 +402,16 @@ class _SalesInvoicesScreenState extends State<SalesInvoicesScreen> {
         ],
       );
     }).toList();
+  }
+
+  String _formatAmount(dynamic amount) {
+    if (amount == null) return '0.00';
+    if (amount is num) return amount.toStringAsFixed(2);
+    if (amount is String) {
+      final parsed = double.tryParse(amount);
+      return parsed?.toStringAsFixed(2) ?? '0.00';
+    }
+    return '0.00';
   }
 
   String _formatDate(DateTime date) {
@@ -380,15 +435,115 @@ class _SalesInvoicesScreenState extends State<SalesInvoicesScreen> {
   void _handleInvoiceAction(String action, SalesInvoice invoice) {
     switch (action) {
       case 'view':
-        // TODO: Implement view invoice
+        _viewInvoice(invoice);
         break;
       case 'edit':
-        // TODO: Implement edit invoice
+        _editInvoice(invoice);
+        break;
+      case 'duplicate':
+        _duplicateInvoice(invoice);
         break;
       case 'delete':
         _deleteInvoice(invoice);
         break;
     }
+  }
+
+  void _viewInvoice(SalesInvoice invoice) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Invoice ${invoice.fullInvoiceNumber}'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildDetailRow('Party', invoice.party?.name ?? 'N/A'),
+              _buildDetailRow('Date', _formatDate(invoice.invoiceDate)),
+              _buildDetailRow('Due Date', _formatDate(invoice.dueDate)),
+              _buildDetailRow(
+                  'Amount', '₹${_formatAmount(invoice.totalAmount)}'),
+              _buildDetailRow(
+                  'Paid', '₹${_formatAmount(invoice.amountReceived)}'),
+              _buildDetailRow(
+                  'Balance', '₹${_formatAmount(invoice.balanceAmount)}'),
+              _buildDetailRow('Status', invoice.paymentStatus.toUpperCase()),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(
+              '$label:',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+          Expanded(child: Text(value)),
+        ],
+      ),
+    );
+  }
+
+  void _editInvoice(SalesInvoice invoice) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CreateSalesInvoiceScreen(
+          invoiceId: invoice.id,
+          invoiceData: {
+            'invoice_number': invoice.fullInvoiceNumber,
+            'party_id': invoice.party?.id,
+            'party_name': invoice.party?.name,
+            'invoice_date': invoice.invoiceDate.toIso8601String(),
+            'due_date': invoice.dueDate.toIso8601String(),
+            'total_amount': invoice.totalAmount,
+            'amount_received': invoice.amountReceived,
+            'balance_amount': invoice.balanceAmount,
+            'payment_status': invoice.paymentStatus,
+          },
+        ),
+      ),
+    ).then((result) {
+      if (result == true) {
+        _loadInvoices();
+      }
+    });
+  }
+
+  void _duplicateInvoice(SalesInvoice invoice) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Duplicating invoice ${invoice.fullInvoiceNumber}...'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const CreateSalesInvoiceScreen(),
+      ),
+    ).then((result) {
+      if (result == true) {
+        _loadInvoices();
+      }
+    });
   }
 
   Future<void> _deleteInvoice(SalesInvoice invoice) async {

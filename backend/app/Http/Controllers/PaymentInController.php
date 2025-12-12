@@ -233,6 +233,7 @@ class PaymentInController extends Controller
             'payment_mode' => 'sometimes|string|max:50',
             'notes' => 'nullable|string',
             'reference_number' => 'nullable|string|max:100',
+            'bank_account_id' => 'nullable|exists:bank_accounts,id',
         ]);
 
         if ($validator->fails()) {
@@ -240,6 +241,28 @@ class PaymentInController extends Controller
         }
 
         try {
+            \DB::beginTransaction();
+
+            $oldAmount = $payment->amount;
+            $oldPaymentMode = $payment->payment_mode;
+            $organizationId = $payment->organization_id;
+
+            // Find old bank transaction and reverse it
+            $oldTransaction = BankTransaction::where('description', 'like', "%Payment In: {$payment->payment_number}%")
+                ->where('organization_id', $organizationId)
+                ->first();
+
+            if ($oldTransaction) {
+                $oldAccount = \App\Models\BankAccount::find($oldTransaction->account_id);
+                if ($oldAccount) {
+                    // Reverse old transaction (subtract the old amount)
+                    $oldAccount->decrement('current_balance', $oldAmount);
+                }
+                // Delete old transaction
+                $oldTransaction->delete();
+            }
+
+            // Update payment
             $payment->update($request->only([
                 'party_id',
                 'payment_date',
@@ -249,12 +272,74 @@ class PaymentInController extends Controller
                 'reference_number',
             ]));
 
+            // Create new bank transaction with updated values
+            $newAmount = $request->has('amount') ? $request->amount : $oldAmount;
+            $newPaymentMode = $request->has('payment_mode') ? $request->payment_mode : $oldPaymentMode;
+            
+            $description = "Payment In: {$payment->payment_number}";
+            if ($payment->notes) {
+                $description .= " - {$payment->notes}";
+            }
+
+            if ($newPaymentMode === 'Cash') {
+                $cashAccount = \App\Models\BankAccount::firstOrCreate(
+                    [
+                        'organization_id' => $organizationId,
+                        'account_name' => 'Cash in Hand',
+                        'account_type' => 'cash',
+                    ],
+                    [
+                        'user_id' => $request->user()->id,
+                        'opening_balance' => 0,
+                        'current_balance' => 0,
+                        'as_of_date' => now(),
+                    ]
+                );
+
+                $cashAccount->increment('current_balance', $newAmount);
+
+                BankTransaction::create([
+                    'user_id' => $request->user()->id,
+                    'organization_id' => $organizationId,
+                    'account_id' => $cashAccount->id,
+                    'transaction_type' => 'payment_in',
+                    'amount' => $newAmount,
+                    'transaction_date' => $payment->payment_date,
+                    'description' => $description,
+                ]);
+            } else {
+                $bankAccountId = $request->has('bank_account_id') ? $request->bank_account_id : null;
+                
+                if ($bankAccountId) {
+                    $bankAccount = \App\Models\BankAccount::where('id', $bankAccountId)
+                        ->where('organization_id', $organizationId)
+                        ->first();
+
+                    if ($bankAccount) {
+                        $bankAccount->increment('current_balance', $newAmount);
+
+                        BankTransaction::create([
+                            'user_id' => $request->user()->id,
+                            'organization_id' => $organizationId,
+                            'account_id' => $bankAccount->id,
+                            'transaction_type' => 'payment_in',
+                            'amount' => $newAmount,
+                            'transaction_date' => $payment->payment_date,
+                            'description' => $description,
+                        ]);
+                    }
+                }
+            }
+
+            \DB::commit();
+
             return response()->json([
-                'message' => 'Payment updated successfully',
+                'message' => 'Payment updated successfully with bank balance adjustment',
                 'payment' => $payment->load(['party', 'organization']),
             ]);
 
         } catch (\Exception $e) {
+            \DB::rollBack();
             return response()->json([
                 'message' => 'Failed to update payment',
                 'error' => $e->getMessage()

@@ -6,6 +6,7 @@ class QuotationService {
   final ApiClient _apiClient = ApiClient();
 
   Future<Map<String, dynamic>> getQuotations({
+    required int organizationId,
     String? dateFilter,
     String? statusFilter,
     String? search,
@@ -27,7 +28,10 @@ class QuotationService {
               '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}')
           .join('&');
 
-      final response = await _apiClient.get('/quotations?$queryString');
+      final response = await _apiClient.get(
+        '/quotations?$queryString',
+        customHeaders: {'X-Organization-Id': organizationId.toString()},
+      );
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -50,9 +54,12 @@ class QuotationService {
     }
   }
 
-  Future<Quotation> getQuotation(int id) async {
+  Future<Quotation> getQuotation(int id, int organizationId) async {
     try {
-      final response = await _apiClient.get('/quotations/$id');
+      final response = await _apiClient.get(
+        '/quotations/$id',
+        customHeaders: {'X-Organization-Id': organizationId.toString()},
+      );
 
       if (response.statusCode == 200) {
         return Quotation.fromJson(json.decode(response.body));
@@ -64,9 +71,14 @@ class QuotationService {
     }
   }
 
-  Future<Quotation> createQuotation(Map<String, dynamic> quotationData) async {
+  Future<Quotation> createQuotation(
+      int organizationId, Map<String, dynamic> quotationData) async {
     try {
-      final response = await _apiClient.post('/quotations', quotationData);
+      final response = await _apiClient.post(
+        '/quotations',
+        quotationData,
+        customHeaders: {'X-Organization-Id': organizationId.toString()},
+      );
 
       if (response.statusCode == 201) {
         final data = json.decode(response.body);
@@ -81,9 +93,13 @@ class QuotationService {
   }
 
   Future<Quotation> updateQuotation(
-      int id, Map<String, dynamic> quotationData) async {
+      int id, int organizationId, Map<String, dynamic> quotationData) async {
     try {
-      final response = await _apiClient.put('/quotations/$id', quotationData);
+      final response = await _apiClient.put(
+        '/quotations/$id',
+        quotationData,
+        customHeaders: {'X-Organization-Id': organizationId.toString()},
+      );
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -97,9 +113,12 @@ class QuotationService {
     }
   }
 
-  Future<void> deleteQuotation(int id) async {
+  Future<void> deleteQuotation(int id, int organizationId) async {
     try {
-      final response = await _apiClient.delete('/quotations/$id');
+      final response = await _apiClient.delete(
+        '/quotations/$id',
+        customHeaders: {'X-Organization-Id': organizationId.toString()},
+      );
 
       if (response.statusCode != 200) {
         final error = json.decode(response.body);
@@ -110,9 +129,13 @@ class QuotationService {
     }
   }
 
-  Future<Map<String, dynamic>> getNextQuotationNumber() async {
+  Future<Map<String, dynamic>> getNextQuotationNumber(
+      int organizationId) async {
     try {
-      final response = await _apiClient.get('/quotations/next-number');
+      final response = await _apiClient.get(
+        '/quotations/next-number',
+        customHeaders: {'X-Organization-Id': organizationId.toString()},
+      );
 
       if (response.statusCode == 200) {
         return json.decode(response.body);
