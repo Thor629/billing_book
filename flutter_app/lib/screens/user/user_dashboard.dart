@@ -22,6 +22,7 @@ import 'delivery_challan_screen.dart';
 import 'payment_out_screen.dart';
 import 'purchase_return_screen.dart';
 import 'debit_note_screen.dart';
+import 'gst_report_screen.dart';
 
 class UserDashboard extends StatefulWidget {
   const UserDashboard({super.key});
@@ -308,6 +309,12 @@ class _UserDashboardState extends State<UserDashboard> {
                           onTap: () => setState(() => _currentScreen = 19),
                         ),
                         _buildMenuItem(
+                          icon: Icons.assessment_outlined,
+                          label: 'GST Report',
+                          isActive: _currentScreen == 25,
+                          onTap: () => setState(() => _currentScreen = 25),
+                        ),
+                        _buildMenuItem(
                           icon: Icons.receipt_outlined,
                           label: 'E-Invoicing',
                           isActive: _currentScreen == 22,
@@ -510,6 +517,8 @@ class _UserDashboardState extends State<UserDashboard> {
       case 24:
         return const ExpensesScreen();
       case 25:
+        return const GstReportScreen();
+      case 26:
         return _buildPlaceholderScreen('POS Billing');
       // Business Tools
       case 26:
