@@ -81,13 +81,13 @@ class GstReportController extends Controller
             ->where('sales_invoices.organization_id', $organizationId)
             ->whereBetween('sales_invoices.invoice_date', [$startDate, $endDate])
             ->selectRaw('
-                sales_invoice_items.gst_rate,
-                SUM(sales_invoice_items.quantity * sales_invoice_items.price) as taxable_amount,
+                sales_invoice_items.tax_percent as gst_rate,
+                SUM(sales_invoice_items.quantity * sales_invoice_items.price_per_unit) as taxable_amount,
                 SUM(sales_invoice_items.tax_amount) as gst_amount,
                 COUNT(DISTINCT sales_invoices.id) as invoice_count
             ')
-            ->groupBy('sales_invoice_items.gst_rate')
-            ->orderBy('sales_invoice_items.gst_rate')
+            ->groupBy('sales_invoice_items.tax_percent')
+            ->orderBy('sales_invoice_items.tax_percent')
             ->get();
 
         // Purchase by GST Rate
@@ -96,13 +96,13 @@ class GstReportController extends Controller
             ->where('purchase_invoices.organization_id', $organizationId)
             ->whereBetween('purchase_invoices.invoice_date', [$startDate, $endDate])
             ->selectRaw('
-                purchase_invoice_items.gst_rate,
-                SUM(purchase_invoice_items.quantity * purchase_invoice_items.price) as taxable_amount,
-                SUM(purchase_invoice_items.tax_amount) as gst_amount,
+                purchase_invoice_items.tax_rate as gst_rate,
+                SUM(purchase_invoice_items.quantity * purchase_invoice_items.rate) as taxable_amount,
+                SUM(purchase_invoice_items.amount * purchase_invoice_items.tax_rate / 100) as gst_amount,
                 COUNT(DISTINCT purchase_invoices.id) as invoice_count
             ')
-            ->groupBy('purchase_invoice_items.gst_rate')
-            ->orderBy('purchase_invoice_items.gst_rate')
+            ->groupBy('purchase_invoice_items.tax_rate')
+            ->orderBy('purchase_invoice_items.tax_rate')
             ->get();
 
         return response()->json([
@@ -128,15 +128,15 @@ class GstReportController extends Controller
 
         if ($type === 'all' || $type === 'sales') {
             $sales = DB::table('sales_invoices')
-                ->join('parties', 'sales_invoices.party_id', '=', 'parties.id')
+                ->leftJoin('parties', 'sales_invoices.party_id', '=', 'parties.id')
                 ->where('sales_invoices.organization_id', $organizationId)
                 ->whereBetween('sales_invoices.invoice_date', [$startDate, $endDate])
                 ->select(
                     'sales_invoices.id',
-                    'sales_invoices.invoice_number',
+                    DB::raw("CONCAT(sales_invoices.invoice_prefix, sales_invoices.invoice_number) as invoice_number"),
                     'sales_invoices.invoice_date',
-                    'parties.name as party_name',
-                    'parties.gstin',
+                    DB::raw("COALESCE(parties.name, 'POS') as party_name"),
+                    'parties.gst_no as gstin',
                     DB::raw('(sales_invoices.total_amount - sales_invoices.tax_amount) as taxable_amount'),
                     'sales_invoices.tax_amount as gst_amount',
                     'sales_invoices.total_amount',
@@ -149,15 +149,15 @@ class GstReportController extends Controller
 
         if ($type === 'all' || $type === 'purchase') {
             $purchases = DB::table('purchase_invoices')
-                ->join('parties', 'purchase_invoices.party_id', '=', 'parties.id')
+                ->leftJoin('parties', 'purchase_invoices.party_id', '=', 'parties.id')
                 ->where('purchase_invoices.organization_id', $organizationId)
                 ->whereBetween('purchase_invoices.invoice_date', [$startDate, $endDate])
                 ->select(
                     'purchase_invoices.id',
                     'purchase_invoices.invoice_number',
                     'purchase_invoices.invoice_date',
-                    'parties.name as party_name',
-                    'parties.gstin',
+                    DB::raw("COALESCE(parties.name, 'Unknown') as party_name"),
+                    'parties.gst_no as gstin',
                     DB::raw('(purchase_invoices.total_amount - purchase_invoices.tax_amount) as taxable_amount'),
                     'purchase_invoices.tax_amount as gst_amount',
                     'purchase_invoices.total_amount',
@@ -176,6 +176,40 @@ class GstReportController extends Controller
         return response()->json([
             'success' => true,
             'data' => $transactions,
+        ]);
+    }
+
+    /**
+     * Export GST Report as PDF
+     */
+    public function exportPdf(Request $request)
+    {
+        $organizationId = $request->input('organization_id');
+        $startDate = $request->input('start_date', Carbon::now()->startOfMonth()->toDateString());
+        $endDate = $request->input('end_date', Carbon::now()->endOfMonth()->toDateString());
+
+        // Get all data
+        $summary = $this->getGstSummary($request)->getData()->data;
+        $byRate = $this->getGstByRate($request)->getData()->data;
+        $transactions = $this->getGstTransactions($request)->getData()->data;
+
+        // Get organization name
+        $organization = DB::table('organizations')
+            ->where('id', $organizationId)
+            ->first();
+
+        // Return data for PDF generation
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'summary' => $summary,
+                'sales_by_rate' => $byRate->sales_by_rate ?? [],
+                'purchase_by_rate' => $byRate->purchase_by_rate ?? [],
+                'transactions' => $transactions,
+                'organization_name' => $organization->name ?? 'Organization',
+                'start_date' => $startDate,
+                'end_date' => $endDate,
+            ],
         ]);
     }
 }

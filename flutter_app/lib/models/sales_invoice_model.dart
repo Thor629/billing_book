@@ -1,7 +1,7 @@
 class SalesInvoice {
   final int? id;
   final int organizationId;
-  final int partyId;
+  final int? partyId; // Nullable for POS sales
   final int userId;
   final String invoicePrefix;
   final String invoiceNumber;
@@ -47,7 +47,7 @@ class SalesInvoice {
   SalesInvoice({
     this.id,
     required this.organizationId,
-    required this.partyId,
+    this.partyId, // Nullable for POS sales
     required this.userId,
     required this.invoicePrefix,
     required this.invoiceNumber,

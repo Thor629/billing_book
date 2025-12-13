@@ -66,6 +66,19 @@ class SalesInvoiceController extends Controller
             ->orderBy('created_at', 'desc')
             ->paginate($request->per_page ?? 15);
 
+        // Add "POS" as party name for invoices without party (POS sales)
+        $invoices->getCollection()->transform(function ($invoice) {
+            if ($invoice->party_id === null || $invoice->party === null) {
+                $invoice->party = (object)[
+                    'id' => null,
+                    'name' => 'POS',
+                    'phone' => null,
+                    'email' => null,
+                ];
+            }
+            return $invoice;
+        });
+
         // Calculate summary
         $summary = [
             'total_sales' => SalesInvoice::where('organization_id', $organizationId)

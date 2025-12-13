@@ -23,6 +23,7 @@ import 'payment_out_screen.dart';
 import 'purchase_return_screen.dart';
 import 'debit_note_screen.dart';
 import 'gst_report_screen.dart';
+import 'pos_billing_screen.dart';
 
 class UserDashboard extends StatefulWidget {
   const UserDashboard({super.key});
@@ -311,8 +312,8 @@ class _UserDashboardState extends State<UserDashboard> {
                         _buildMenuItem(
                           icon: Icons.assessment_outlined,
                           label: 'GST Report',
-                          isActive: _currentScreen == 25,
-                          onTap: () => setState(() => _currentScreen = 25),
+                          isActive: _currentScreen == 20,
+                          onTap: () => setState(() => _currentScreen = 20),
                         ),
                         _buildMenuItem(
                           icon: Icons.receipt_outlined,
@@ -335,8 +336,8 @@ class _UserDashboardState extends State<UserDashboard> {
                         _buildMenuItem(
                           icon: Icons.point_of_sale_outlined,
                           label: 'POS Billing',
-                          isActive: _currentScreen == 25,
-                          onTap: () => setState(() => _currentScreen = 25),
+                          isActive: _currentScreen == 21,
+                          onTap: () => setState(() => _currentScreen = 21),
                         ),
 
                         // Section Header - Business Tools
@@ -510,16 +511,16 @@ class _UserDashboardState extends State<UserDashboard> {
       // Accounting Solutions
       case 19:
         return const CashBankScreen();
+      case 20:
+        return const GstReportScreen();
+      case 21:
+        return const PosBillingScreen();
       case 22:
         return _buildPlaceholderScreen('E-Invoicing');
       case 23:
         return _buildPlaceholderScreen('Automated Bills');
       case 24:
         return const ExpensesScreen();
-      case 25:
-        return const GstReportScreen();
-      case 26:
-        return _buildPlaceholderScreen('POS Billing');
       // Business Tools
       case 26:
         return _buildPlaceholderScreen('Staff Attendance & Payroll');

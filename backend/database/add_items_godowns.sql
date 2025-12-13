@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS items (
     organization_id BIGINT UNSIGNED NOT NULL,
     item_name VARCHAR(255) NOT NULL,
     item_code VARCHAR(255) UNIQUE NOT NULL,
+    barcode VARCHAR(255),
     selling_price DECIMAL(10,2) DEFAULT 0,
     purchase_price DECIMAL(10,2) DEFAULT 0,
     mrp DECIMAL(10,2) DEFAULT 0,
@@ -20,6 +21,7 @@ CREATE TABLE IF NOT EXISTS items (
     FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
     INDEX idx_items_organization_id (organization_id),
     INDEX idx_items_item_code (item_code),
+    INDEX idx_items_barcode (barcode),
     INDEX idx_items_category (category),
     INDEX idx_items_is_active (is_active)
 );

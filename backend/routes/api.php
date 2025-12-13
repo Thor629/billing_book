@@ -215,6 +215,15 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/summary', [App\Http\Controllers\GstReportController::class, 'getGstSummary']);
         Route::get('/by-rate', [App\Http\Controllers\GstReportController::class, 'getGstByRate']);
         Route::get('/transactions', [App\Http\Controllers\GstReportController::class, 'getGstTransactions']);
+        Route::get('/export-pdf', [App\Http\Controllers\GstReportController::class, 'exportPdf']);
+    });
+    
+    // POS Billing routes
+    Route::prefix('pos')->group(function () {
+        Route::get('/search-items', [App\Http\Controllers\PosController::class, 'searchItems']);
+        Route::get('/item-by-barcode', [App\Http\Controllers\PosController::class, 'getItemByBarcode']);
+        Route::get('/item/{id}', [App\Http\Controllers\PosController::class, 'getItem']);
+        Route::post('/save-bill', [App\Http\Controllers\PosController::class, 'saveBill']);
     });
     
     // User profile routes

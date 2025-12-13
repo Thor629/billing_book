@@ -281,7 +281,7 @@ class _SalesInvoicesScreenState extends State<SalesInvoicesScreen> {
       return DataRow(
         cells: [
           DataCell(TableCellText(invoice.fullInvoiceNumber)),
-          DataCell(TableCellText(invoice.party?.name ?? 'N/A')),
+          DataCell(TableCellText(invoice.party?.name ?? 'POS')),
           DataCell(TableCellText(_formatDate(invoice.invoiceDate))),
           DataCell(TableCellText(
             '₹${_formatAmount(invoice.totalAmount)}',
@@ -293,110 +293,6 @@ class _SalesInvoicesScreenState extends State<SalesInvoicesScreen> {
               onView: () => _viewInvoice(invoice),
               onEdit: () => _editInvoice(invoice),
               onDelete: () => _deleteInvoice(invoice),
-            ),
-          ),
-        ],
-      );
-    }).toList();
-  }
-
-  List<DataRow> _buildInvoiceRowsOld() {
-    return _invoices.map((invoice) {
-      final isPaid = invoice.paymentStatus == 'paid';
-      final isOverdue = invoice.isOverdue;
-
-      return DataRow(
-        cells: [
-          DataCell(Text(_formatDate(invoice.invoiceDate))),
-          DataCell(Text(invoice.fullInvoiceNumber)),
-          DataCell(Text(invoice.party?.name ?? 'N/A')),
-          DataCell(
-            Text(
-              invoice.dueInText,
-              style: TextStyle(
-                color: isOverdue ? Colors.red : null,
-              ),
-            ),
-          ),
-          DataCell(
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('₹${_formatAmount(invoice.totalAmount)}'),
-                if (invoice.balanceAmount > 0)
-                  Text(
-                    '(₹${_formatAmount(invoice.balanceAmount)} unpaid)',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: Colors.grey,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          DataCell(
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              decoration: BoxDecoration(
-                color: isPaid ? Colors.green[50] : Colors.red[50],
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                invoice.paymentStatus.toUpperCase(),
-                style: TextStyle(
-                  color: isPaid ? Colors.green[700] : Colors.red[700],
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-          ),
-          DataCell(
-            PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert, size: 18),
-              itemBuilder: (context) => [
-                const PopupMenuItem(
-                  value: 'view',
-                  child: Row(
-                    children: [
-                      Icon(Icons.visibility, size: 18),
-                      SizedBox(width: 8),
-                      Text('View'),
-                    ],
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: 'edit',
-                  child: Row(
-                    children: [
-                      Icon(Icons.edit, size: 18),
-                      SizedBox(width: 8),
-                      Text('Edit'),
-                    ],
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: 'duplicate',
-                  child: Row(
-                    children: [
-                      Icon(Icons.content_copy, size: 18),
-                      SizedBox(width: 8),
-                      Text('Duplicate'),
-                    ],
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: 'delete',
-                  child: Row(
-                    children: [
-                      Icon(Icons.delete, size: 18, color: Colors.red),
-                      SizedBox(width: 8),
-                      Text('Delete', style: TextStyle(color: Colors.red)),
-                    ],
-                  ),
-                ),
-              ],
-              onSelected: (value) => _handleInvoiceAction(value, invoice),
             ),
           ),
         ],
@@ -432,23 +328,6 @@ class _SalesInvoicesScreenState extends State<SalesInvoicesScreen> {
     return '${date.day} ${months[date.month - 1]} ${date.year}';
   }
 
-  void _handleInvoiceAction(String action, SalesInvoice invoice) {
-    switch (action) {
-      case 'view':
-        _viewInvoice(invoice);
-        break;
-      case 'edit':
-        _editInvoice(invoice);
-        break;
-      case 'duplicate':
-        _duplicateInvoice(invoice);
-        break;
-      case 'delete':
-        _deleteInvoice(invoice);
-        break;
-    }
-  }
-
   void _viewInvoice(SalesInvoice invoice) {
     showDialog(
       context: context,
@@ -459,7 +338,7 @@ class _SalesInvoicesScreenState extends State<SalesInvoicesScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              _buildDetailRow('Party', invoice.party?.name ?? 'N/A'),
+              _buildDetailRow('Party', invoice.party?.name ?? 'POS'),
               _buildDetailRow('Date', _formatDate(invoice.invoiceDate)),
               _buildDetailRow('Due Date', _formatDate(invoice.dueDate)),
               _buildDetailRow(
@@ -519,25 +398,6 @@ class _SalesInvoicesScreenState extends State<SalesInvoicesScreen> {
             'payment_status': invoice.paymentStatus,
           },
         ),
-      ),
-    ).then((result) {
-      if (result == true) {
-        _loadInvoices();
-      }
-    });
-  }
-
-  void _duplicateInvoice(SalesInvoice invoice) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Duplicating invoice ${invoice.fullInvoiceNumber}...'),
-        duration: const Duration(seconds: 2),
-      ),
-    );
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const CreateSalesInvoiceScreen(),
       ),
     ).then((result) {
       if (result == true) {

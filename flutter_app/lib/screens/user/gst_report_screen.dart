@@ -1,7 +1,10 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import '../../core/constants/app_colors.dart';
+import 'package:printing/printing.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../providers/organization_provider.dart';
 import '../../services/gst_report_service.dart';
 import '../../widgets/unified_data_table.dart';
@@ -144,15 +147,382 @@ class _GstReportScreenState extends State<GstReportScreen> {
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
           const Spacer(),
-          IconButton(
-            icon: const Icon(Icons.download),
-            onPressed: () {
-              // TODO: Export functionality
-            },
+          ElevatedButton.icon(
+            onPressed: _exportToPdf,
+            icon: const Icon(Icons.picture_as_pdf, size: 18),
+            label: const Text('PDF'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF9800),
+              foregroundColor: Colors.white,
+            ),
+          ),
+          const SizedBox(width: 8),
+          ElevatedButton.icon(
+            onPressed: _exportToExcel,
+            icon: const Icon(Icons.table_chart, size: 18),
+            label: const Text('Excel'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF217346),
+              foregroundColor: Colors.white,
+            ),
+          ),
+          const SizedBox(width: 8),
+          ElevatedButton.icon(
+            onPressed: _shareOnWhatsApp,
+            icon: const Icon(Icons.share, size: 18),
+            label: const Text('Share'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF25D366),
+              foregroundColor: Colors.white,
+            ),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _exportToPdf() async {
+    debugPrint('Export PDF clicked');
+
+    if (_summary == null) {
+      debugPrint('No summary data available');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No data to export')),
+      );
+      return;
+    }
+
+    debugPrint('Starting PDF generation...');
+
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: Card(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Generating PDF...'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final orgProvider =
+          Provider.of<OrganizationProvider>(context, listen: false);
+
+      debugPrint('Organization: ${orgProvider.selectedOrganization?.name}');
+      debugPrint(
+          'Calling generateGstReportPdf with ${_transactions.length} transactions');
+
+      // Generate PDF bytes (works on all platforms including Web)
+      final pdfBytes = await _gstService.generateGstReportPdf(
+        summary: _summary!,
+        salesByRate: _salesByRate,
+        purchaseByRate: _purchaseByRate,
+        transactions: _transactions,
+        startDate: _startDate,
+        endDate: _endDate,
+        organizationName:
+            orgProvider.selectedOrganization?.name ?? 'Organization',
+      );
+
+      debugPrint('PDF bytes generated: ${pdfBytes.length} bytes');
+
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+
+      debugPrint('Opening PDF preview...');
+      await Printing.layoutPdf(
+        onLayout: (format) async => pdfBytes,
+      );
+
+      debugPrint('PDF preview opened successfully');
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('PDF generated successfully!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e, stackTrace) {
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+      debugPrint('PDF Generation Error: $e');
+      debugPrint('Stack trace: $stackTrace');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error generating PDF: $e'),
+          duration: const Duration(seconds: 5),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _exportToExcel() async {
+    debugPrint('Export Excel clicked');
+
+    if (_summary == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No data to export')),
+      );
+      return;
+    }
+
+    debugPrint('Starting Excel generation...');
+
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: Card(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Generating Excel...'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final orgProvider =
+          Provider.of<OrganizationProvider>(context, listen: false);
+
+      debugPrint('Calling generateGstReportExcel...');
+
+      final excelBytes = await _gstService.generateGstReportExcel(
+        summary: _summary!,
+        salesByRate: _salesByRate,
+        purchaseByRate: _purchaseByRate,
+        transactions: _transactions,
+        startDate: _startDate,
+        endDate: _endDate,
+        organizationName:
+            orgProvider.selectedOrganization?.name ?? 'Organization',
+      );
+
+      debugPrint('Excel bytes generated: ${excelBytes.length} bytes');
+
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+
+      // Download Excel file
+      await Printing.sharePdf(
+        bytes: excelBytes,
+        filename:
+            'GST_Report_${DateFormat('yyyyMMdd').format(DateTime.now())}.xlsx',
+      );
+
+      debugPrint('Excel shared successfully');
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Excel generated successfully!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e, stackTrace) {
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+      debugPrint('Excel Generation Error: $e');
+      debugPrint('Stack trace: $stackTrace');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error generating Excel: $e'),
+          duration: const Duration(seconds: 5),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _shareOnWhatsApp() async {
+    if (_summary == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No data to share')),
+      );
+      return;
+    }
+
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: Card(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Preparing to share...'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final orgProvider =
+          Provider.of<OrganizationProvider>(context, listen: false);
+
+      // Generate PDF bytes (works on all platforms including Web)
+      final pdfBytes = await _gstService.generateGstReportPdf(
+        summary: _summary!,
+        salesByRate: _salesByRate,
+        purchaseByRate: _purchaseByRate,
+        transactions: _transactions,
+        startDate: _startDate,
+        endDate: _endDate,
+        organizationName:
+            orgProvider.selectedOrganization?.name ?? 'Organization',
+      );
+
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+
+      // Show share options
+      await _showShareOptions(pdfBytes);
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error preparing share: $e')),
+      );
+    }
+  }
+
+  Future<void> _showShareOptions(Uint8List pdfBytes) async {
+    final sales = _summary!['sales'];
+    final purchases = _summary!['purchases'];
+    final netLiability = _toDouble(_summary!['net_gst_liability']);
+
+    final message = '''
+📊 *GST Report*
+${DateFormat('dd MMM yyyy').format(_startDate)} - ${DateFormat('dd MMM yyyy').format(_endDate)}
+
+💰 *Summary*
+Output GST (Sales): ₹${_toDouble(sales['gst_amount']).toStringAsFixed(2)}
+Input GST (Purchase): ₹${_toDouble(purchases['gst_amount']).toStringAsFixed(2)}
+Net GST Liability: ₹${netLiability.toStringAsFixed(2)}
+
+📄 Detailed report attached.
+''';
+
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Share GST Report',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 20),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF25D366).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.chat, color: Color(0xFF25D366)),
+              ),
+              title: const Text('Share on WhatsApp'),
+              subtitle: const Text('Share PDF via WhatsApp'),
+              onTap: () async {
+                Navigator.pop(context);
+                await _shareViaWhatsApp(pdfBytes, message);
+              },
+            ),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.share, color: Colors.blue),
+              ),
+              title: const Text('Share via Other Apps'),
+              subtitle: const Text('Email, Messages, etc.'),
+              onTap: () async {
+                Navigator.pop(context);
+                await Printing.sharePdf(
+                  bytes: pdfBytes,
+                  filename:
+                      'GST_Report_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf',
+                );
+              },
+            ),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.grey.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.message, color: Colors.grey),
+              ),
+              title: const Text('Share Text Only'),
+              subtitle: const Text('Share summary without PDF'),
+              onTap: () async {
+                Navigator.pop(context);
+                await Share.share(message);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _shareViaWhatsApp(Uint8List pdfBytes, String message) async {
+    try {
+      // Share PDF via printing package
+      await Printing.sharePdf(
+        bytes: pdfBytes,
+        filename:
+            'GST_Report_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf',
+      );
+
+      // Try WhatsApp URL for text message
+      try {
+        final whatsappUrl =
+            Uri.parse('whatsapp://send?text=${Uri.encodeComponent(message)}');
+        if (await canLaunchUrl(whatsappUrl)) {
+          await launchUrl(whatsappUrl);
+        }
+      } catch (e) {
+        // WhatsApp URL failed, but PDF was already shared
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error sharing: $e')),
+      );
+    }
   }
 
   Widget _buildDateFilter() {
@@ -287,12 +657,20 @@ class _GstReportScreenState extends State<GstReportScreen> {
     }
   }
 
+  double _toDouble(dynamic value) {
+    if (value == null) return 0.0;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0.0;
+    return 0.0;
+  }
+
   Widget _buildSummaryTab() {
     if (_summary == null) return const Center(child: Text('No data'));
 
     final sales = _summary!['sales'];
     final purchases = _summary!['purchases'];
-    final netLiability = _summary!['net_gst_liability'];
+    final netLiability = _toDouble(_summary!['net_gst_liability']);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -303,7 +681,7 @@ class _GstReportScreenState extends State<GstReportScreen> {
               Expanded(
                   child: _buildSummaryCard(
                 'Output GST (Sales)',
-                sales['gst_amount'],
+                _toDouble(sales['gst_amount']),
                 Colors.green,
                 Icons.arrow_upward,
               )),
@@ -311,7 +689,7 @@ class _GstReportScreenState extends State<GstReportScreen> {
               Expanded(
                   child: _buildSummaryCard(
                 'Input GST (Purchase)',
-                purchases['gst_amount'],
+                _toDouble(purchases['gst_amount']),
                 Colors.blue,
                 Icons.arrow_downward,
               )),
@@ -348,7 +726,7 @@ class _GstReportScreenState extends State<GstReportScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(icon, color: color, size: 24),
@@ -397,14 +775,17 @@ class _GstReportScreenState extends State<GstReportScreen> {
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 16),
-          _buildDetailRow('Sales Taxable Amount', sales['taxable_amount']),
-          _buildDetailRow('Sales GST', sales['gst_amount']),
-          _buildDetailRow('Total Sales', sales['total_amount'], isBold: true),
-          const Divider(height: 32),
           _buildDetailRow(
-              'Purchase Taxable Amount', purchases['taxable_amount']),
-          _buildDetailRow('Purchase GST', purchases['gst_amount']),
-          _buildDetailRow('Total Purchase', purchases['total_amount'],
+              'Sales Taxable Amount', _toDouble(sales['taxable_amount'])),
+          _buildDetailRow('Sales GST', _toDouble(sales['gst_amount'])),
+          _buildDetailRow('Total Sales', _toDouble(sales['total_amount']),
+              isBold: true),
+          const Divider(height: 32),
+          _buildDetailRow('Purchase Taxable Amount',
+              _toDouble(purchases['taxable_amount'])),
+          _buildDetailRow('Purchase GST', _toDouble(purchases['gst_amount'])),
+          _buildDetailRow(
+              'Total Purchase', _toDouble(purchases['total_amount']),
               isBold: true),
         ],
       ),
@@ -477,8 +858,8 @@ class _GstReportScreenState extends State<GstReportScreen> {
               return DataRow(cells: [
                 DataCell(TableCellText('${item['gst_rate']}%')),
                 DataCell(
-                    TableAmount(amount: item['taxable_amount'].toDouble())),
-                DataCell(TableAmount(amount: item['gst_amount'].toDouble())),
+                    TableAmount(amount: _toDouble(item['taxable_amount']))),
+                DataCell(TableAmount(amount: _toDouble(item['gst_amount']))),
                 DataCell(TableCellText(item['invoice_count'].toString())),
               ]);
             }).toList(),
@@ -512,9 +893,9 @@ class _GstReportScreenState extends State<GstReportScreen> {
             DataCell(TableCellText(txn['invoice_number'])),
             DataCell(TableCellText(txn['party_name'])),
             DataCell(TableCellText(txn['gstin'] ?? '-')),
-            DataCell(TableAmount(amount: txn['taxable_amount'].toDouble())),
-            DataCell(TableAmount(amount: txn['gst_amount'].toDouble())),
-            DataCell(TableAmount(amount: txn['total_amount'].toDouble())),
+            DataCell(TableAmount(amount: _toDouble(txn['taxable_amount']))),
+            DataCell(TableAmount(amount: _toDouble(txn['gst_amount']))),
+            DataCell(TableAmount(amount: _toDouble(txn['total_amount']))),
           ]);
         }).toList(),
       ),
