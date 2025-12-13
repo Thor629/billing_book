@@ -19,7 +19,12 @@ class PurchaseOrder extends Model
         'subtotal',
         'tax_amount',
         'discount_amount',
+        'additional_charges',
+        'round_off',
+        'auto_round_off',
         'total_amount',
+        'fully_paid',
+        'bank_account_id',
         'status',
         'notes',
         'terms',
@@ -31,7 +36,11 @@ class PurchaseOrder extends Model
         'subtotal' => 'decimal:2',
         'tax_amount' => 'decimal:2',
         'discount_amount' => 'decimal:2',
+        'additional_charges' => 'decimal:2',
+        'round_off' => 'decimal:2',
         'total_amount' => 'decimal:2',
+        'auto_round_off' => 'boolean',
+        'fully_paid' => 'boolean',
     ];
 
     public function organization()
@@ -47,5 +56,10 @@ class PurchaseOrder extends Model
     public function items()
     {
         return $this->hasMany(PurchaseOrderItem::class);
+    }
+
+    public function bankAccount()
+    {
+        return $this->belongsTo(BankAccount::class);
     }
 }

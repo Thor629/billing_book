@@ -33,6 +33,10 @@ class ApiClient {
       final token = await getToken();
       if (token != null) {
         headers['Authorization'] = 'Bearer $token';
+        print('ApiClient: Token found and added to headers');
+        print('ApiClient: Token preview: ${token.substring(0, 20)}...');
+      } else {
+        print('ApiClient: WARNING - No token found in storage!');
       }
     }
 
@@ -152,9 +156,13 @@ class ApiClient {
 
   // Handle API response
   Map<String, dynamic> handleResponse(http.Response response) {
+    print('API Response Status: ${response.statusCode}');
+    print('API Response Body: ${response.body}');
+
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return jsonDecode(response.body);
     } else if (response.statusCode == 401) {
+      print('401 Unauthorized - Token may be expired or invalid');
       throw Exception('Unauthorized');
     } else if (response.statusCode == 403) {
       throw Exception('Access denied');

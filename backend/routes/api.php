@@ -226,6 +226,16 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/save-bill', [App\Http\Controllers\PosController::class, 'saveBill']);
     });
     
+    // Purchase Order routes
+    Route::prefix('purchase-orders')->group(function () {
+        Route::get('/', [App\Http\Controllers\PurchaseOrderController::class, 'index']);
+        Route::post('/', [App\Http\Controllers\PurchaseOrderController::class, 'store']);
+        Route::get('/{id}', [App\Http\Controllers\PurchaseOrderController::class, 'show']);
+        Route::put('/{id}', [App\Http\Controllers\PurchaseOrderController::class, 'update']);
+        Route::delete('/{id}', [App\Http\Controllers\PurchaseOrderController::class, 'destroy']);
+        Route::post('/{id}/convert-to-invoice', [App\Http\Controllers\PurchaseOrderController::class, 'convertToInvoice']);
+    });
+    
     // User profile routes
     Route::prefix('user')->group(function () {
         Route::get('/profile', [App\Http\Controllers\ProfileController::class, 'show']);

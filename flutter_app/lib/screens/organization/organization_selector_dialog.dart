@@ -71,27 +71,65 @@ class _OrganizationSelectorDialogState
         if (orgProvider.organizations.isEmpty) {
           // Show error if there was one
           if (orgProvider.error != null) {
+            final isAuthError =
+                orgProvider.error!.contains('Session expired') ||
+                    orgProvider.error!.contains('Unauthorized');
+
             return Scaffold(
               body: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.error_outline,
-                        size: 64, color: Colors.red),
-                    const SizedBox(height: 16),
-                    Text('Error loading organizations',
-                        style: AppTextStyles.h2),
-                    const SizedBox(height: 8),
-                    Text(orgProvider.error!, style: AppTextStyles.bodyMedium),
-                    const SizedBox(height: 24),
-                    ElevatedButton(
-                      onPressed: () {
-                        setState(() => _isInitialized = false);
-                        _loadOrganizations();
-                      },
-                      child: const Text('Retry'),
-                    ),
-                  ],
+                child: Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        isAuthError ? Icons.lock_outline : Icons.error_outline,
+                        size: 64,
+                        color: isAuthError ? AppColors.warning : Colors.red,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        isAuthError
+                            ? 'Session Expired'
+                            : 'Error loading organizations',
+                        style: AppTextStyles.h2,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        orgProvider.error!,
+                        style: AppTextStyles.bodyMedium,
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
+                      if (isAuthError)
+                        Consumer<AuthProvider>(
+                          builder: (context, authProvider, _) {
+                            return ElevatedButton.icon(
+                              onPressed: () async {
+                                await authProvider.logout();
+                                await orgProvider.clearOrganization();
+                              },
+                              icon: const Icon(Icons.logout),
+                              label: const Text('Login Again'),
+                              style: ElevatedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 32,
+                                  vertical: 16,
+                                ),
+                              ),
+                            );
+                          },
+                        )
+                      else
+                        ElevatedButton(
+                          onPressed: () {
+                            setState(() => _isInitialized = false);
+                            _loadOrganizations();
+                          },
+                          child: const Text('Retry'),
+                        ),
+                    ],
+                  ),
                 ),
               ),
             );

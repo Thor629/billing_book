@@ -22,6 +22,7 @@ import 'delivery_challan_screen.dart';
 import 'payment_out_screen.dart';
 import 'purchase_return_screen.dart';
 import 'debit_note_screen.dart';
+import 'purchase_orders_screen.dart';
 import 'gst_report_screen.dart';
 import 'pos_billing_screen.dart';
 
@@ -507,7 +508,7 @@ class _UserDashboardState extends State<UserDashboard> {
       case 17:
         return const DebitNoteScreen();
       case 18:
-        return _buildPlaceholderScreen('Purchase Orders');
+        return const PurchaseOrdersScreen();
       // Accounting Solutions
       case 19:
         return const CashBankScreen();

@@ -50,7 +50,16 @@ class OrganizationProvider with ChangeNotifier {
       print('OrganizationProvider: Loading complete');
     } catch (e) {
       print('OrganizationProvider: Error loading organizations: $e');
-      _error = e.toString().replaceAll('Exception: ', '');
+
+      // Check if it's an authentication error
+      if (e.toString().contains('Unauthorized')) {
+        _error = 'Session expired. Please login again.';
+        print(
+            'OrganizationProvider: Authentication error detected - user needs to re-login');
+      } else {
+        _error = e.toString().replaceAll('Exception: ', '');
+      }
+
       _isLoading = false;
       notifyListeners();
     }

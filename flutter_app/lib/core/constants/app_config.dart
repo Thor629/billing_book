@@ -22,6 +22,7 @@ class AppConfig {
   // Storage Keys
   static const String tokenKey = 'auth_token';
   static const String userKey = 'user_data';
+  static const String tokenExpiryKey = 'token_expiry';
 
   // Pagination
   static const int defaultPageSize = 20;

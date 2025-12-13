@@ -270,8 +270,16 @@ class _AuthWrapperState extends State<AuthWrapper> {
   void initState() {
     super.initState();
     // Initialize auth state
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<AuthProvider>(context, listen: false).initialize();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      await authProvider.initialize();
+
+      // If not authenticated after initialization, clear organization data
+      if (!authProvider.isAuthenticated) {
+        final orgProvider =
+            Provider.of<OrganizationProvider>(context, listen: false);
+        await orgProvider.clearOrganization();
+      }
     });
   }
 
